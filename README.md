@@ -1,6 +1,6 @@
 # Binux CRM — phase 1 (display only)
 
-A Persian RTL Django learning project. Issues #1–#6 introduce the navigation shell and 17 distinct visual pages. All data is fictional. No login, database, save action, real customer, API integration, or deployment is included.
+A Persian RTL, learning-first Django CRM for internal customer and work management. The current checked-in application is still a display-only shell with 17 menu destinations and fictional data; it has no login, database-backed customer records, or external integrations. The menu is a roadmap. The first real workflow is customer management, to be implemented only through scoped issues and reviewed pull requests. See `AGENTS.md`, `PRODUCT.md`, and `docs/` for project rules, architecture, setup, and agreed customer lifecycle.
 
 ## Run locally
 
@@ -35,7 +35,15 @@ For optional desktop/mobile keyboard and no-JavaScript browser checks, install `
 - **Contracts / template includes:** Both contract pages reuse `crm/partials/contract_preview.html` with different `contract_state` values. Edit the partial once and check both routes.
 - **Servers and agents / test client:** Run `.venv/bin/python manage.py test crm`. `crm/tests.py` checks the 17 named GET routes, headings, demo markers, active navigation, 405 on POST, and fictional server content. Add an assertion for another page without depending on internal helper functions.
 
-The next phase can add a real feature one issue at a time, with its model, permissions, validation, API/service adapter and tests designed **after** the workflow is specified. None of these placeholders should be treated as real operational state.
+The customer-management workflow is now the first real-feature target. Its agreed fields, statuses, assignment, archive, and trash rules are recorded in `docs/domain-glossary.md`; unresolved rules must be specified in an issue before implementation. The remaining menu groups are roadmap placeholders. Do not treat any current sample as real operational state or add an external integration until a provider and behavior are explicitly selected.
+
+## Project guidance
+
+- `AGENTS.md` — workflow, branch/PR rules, safe data handling, educational handoff, and verification requirements.
+- `docs/architecture.md` — current request path and future customer-domain boundaries.
+- `docs/setup.md` — environment, run, test, and migration guidance.
+- `docs/domain-glossary.md` — approved product terms, customer lifecycle, and open decisions.
+- `.github/ISSUE_TEMPLATE/feature_request.md` — scoped, testable feature and learning issue template.
 
 ## Assets
 
