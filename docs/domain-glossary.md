@@ -14,7 +14,7 @@ A customer is a person or business managed by the internal team. Agreed attribut
 - Address
 - Notes/description
 
-Field requiredness, phone normalization/uniqueness, and address structure have not yet been specified.
+All fields are optional. A missing status defaults to `بدون تماس`. Phone format and uniqueness are not validated. `ارسالی` is the exception to optional assignment: it cannot be saved without an active Django user assigned.
 
 ## Customer statuses
 
@@ -27,7 +27,7 @@ Use the exact product labels in the Persian UI. English code-facing labels below
 - `تماس مجدد` — Call again
 - `انجام شده` — Completed: the customer appears in a separate completed-customers view.
 
-Allowed transitions, whether a reason is required, and what happens when a completed/rejected customer changes status again remain open decisions unless specified by an issue.
+Changing status updates the status-change timestamp. Restoring from either Archive or Trash sets status to `پیگیری` and stores the restoration origin so the Follow-up view can say where the customer returned from. Other transition-specific behavior remains open unless specified by an issue.
 
 ## Customer type/source
 
@@ -38,7 +38,7 @@ Allowed transitions, whether a reason is required, and what happens when a compl
 
 ## Assignment and task view
 
-A customer can be assigned/referred to one person. The Tasks view lists customers that have an assignee. The owner has not yet specified the assignee directory/source, whether assignment is mandatory for statuses other than `ارسالی`, task dates/reminders, or whether a separate task entity is needed. Do not invent these behaviors.
+A customer can be assigned/referred to one active Django user. The Tasks view lists assigned customers that are not archived or in Trash, including completed customers if they remain assigned. Team accounts are provisioned through Django administration; there is no public self-sign-up or role hierarchy. Task dates/reminders and a separate task entity are not part of this workflow.
 
 ## Follow-up view
 
@@ -50,11 +50,11 @@ Customers explicitly set to `انجام شده` appear in a separate completed-c
 
 ## Archive
 
-The archive is separate from trash. It contains manually archived customers and rejected customers automatically moved there two hours after their status changes to `رد شده`. Both kinds appear in the same archive list; no separate archive category is required. A customer in the archive can be restored. Archived records are retained for one month, then permanently deleted.
+The archive is separate from trash. It contains manually archived customers and rejected customers automatically moved there two elapsed hours after their status-change timestamp. Both kinds appear in the same archive list; no separate archive category is required. A customer in the archive can be restored to Follow-up before expiry, with the origin recorded. Archived records are retained for 30 elapsed days, then permanently deleted.
 
 ## Trash
 
-Deleting a customer moves it to trash rather than deleting it immediately. It remains recoverable from trash for 10 days, then is permanently deleted. Restoring from trash is allowed during the retention period. Trash is not the archive.
+Deleting a customer moves it to trash rather than deleting it immediately. It remains recoverable for 10 elapsed days after deletion, then is permanently deleted. Restoring from trash is allowed before expiry and sets status to Follow-up with the origin marked as Trash. Trash is not the archive.
 
 ## Integrations
 
@@ -62,9 +62,7 @@ External services are planned for the future but none have been selected. Do not
 
 ## Open product decisions
 
-- Which customer fields are required; phone format, uniqueness, and validation.
-- How users/team members are created and selected as assignees.
-- Exact transition rules when a customer leaves `رد شده`, `ارسالی`, `پیگیری`, or `انجام شده`.
-- Whether assignment is required for any status other than `ارسالی`.
-- Whether archival/trash retention has a user-visible countdown and how a retention job is scheduled and monitored.
+- Phone format/normalization/uniqueness and address structure (all fields remain optional).
+- Exact transition behavior for statuses other than the documented archive/trash restore flow.
+- Which hosting scheduler will periodically run `process_customer_lifecycle` and how its failures will be monitored; no deployment target has been selected.
 - Which external services will be integrated and which one owns each shared field.

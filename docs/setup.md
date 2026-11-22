@@ -49,9 +49,20 @@ Optional browser smoke test (requires Playwright installed in the environment an
 
 Set `CHROME_PATH` if Chromium is not at `/usr/bin/google-chrome`, or `CRM_BASE_URL` if the server uses a different local URL. Browser automation is optional; it is not required to run Django tests.
 
-## Database and migrations
+## Database, accounts, and lifecycle maintenance
 
-The checked-in display-only app has no configured database or models, so it needs no migrations. When an issue adds persistent customer data, first inspect the settings and issue scope, then create and test migrations using Django's standard `makemigrations` and `migrate` commands. Never apply migrations to a live system as part of a local feature PR.
+The app uses a local SQLite database at `db.sqlite3` by default. After installing dependencies, initialize it and create the first administrator:
+
+```bash
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py createsuperuser
+```
+
+Sign in at `/admin/` and create active team users there. Team users share the same customer access level; there is no public sign-up or role hierarchy. Do not use the local fallback secret or debug settings in a public deployment.
+
+The `process_customer_lifecycle` management command archives rejected customers at the two-hour boundary and permanently removes archived/trash records after their retention periods. A deployment must run this command periodically (for example, every five minutes) for those automatic transitions to execute. No production scheduler or deployment is configured by this repository; choose and monitor one before using real customer data. The command is transactional and safe to retry.
+
+Migrations are checked in under `crm/migrations/`. Use Django's standard `makemigrations` and `migrate` commands when the model changes. Never apply migrations to a live system as part of a local feature PR.
 
 ## Troubleshooting
 

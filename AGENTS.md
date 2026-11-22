@@ -4,9 +4,9 @@
 Build an internal, learning-first CRM for managing customers and work. The primary product focus is customer management. The interface is Persian and right-to-left; repository documentation, code identifiers, issues, and pull requests are in English. Teach through small, reviewable changes: trace the existing flow, make one focused change, test it, and explain briefly what changed and why.
 
 ## Product direction and current state
-- The Django project currently contains a display-only shell and 17 menu destinations. Read `README.md`, `PRODUCT.md`, and `docs/architecture.md` before changing it.
-- The menu is a roadmap, not proof that a workflow exists. Do not imply that a demo page, fictional record, server status, contract, finance item, or agent is real.
-- The first real workflow is customer management. Its agreed fields and lifecycle are in `docs/domain-glossary.md`; future external integrations are not yet selected.
+- The Django project has 17 original roadmap destinations plus four customer-workflow views. Customer data is now persistent in SQLite and protected by Django authentication; other menu groups remain display-only. Read `README.md`, `PRODUCT.md`, and `docs/architecture.md` before changing it.
+- The menu is a roadmap, not proof that non-customer workflows exist. Do not imply that a demo page, fictional record, server status, contract, finance item, or agent is real.
+- The customer workflow and lifecycle are implemented per `docs/domain-glossary.md`. The lifecycle management command requires a deployment scheduler that has not yet been selected or configured; external integrations remain undecided.
 - Other menu groups remain roadmap items until an issue defines their actual behavior. Do not implement imagined finance, contract, server, or agent operations.
 
 ## Before implementation
