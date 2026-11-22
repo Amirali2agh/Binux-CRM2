@@ -1,0 +1,19 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+  <div><h1 id="page-title">{{ page.title }}</h1><p class="page-lead">{{ page.description }}</p></div>
+  {% if current_page == 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_create' %}">ثبت مشتری</a>{% endif %}
+</section>
+<section class="display-surface" aria-label="{{ page.title }}">
+  <div class="surface-heading"><h2>{{ page.title }}</h2><span>{{ customers|length }} مورد</span></div>
+  <div class="table-wrap customer-table-wrap">
+    <table class="customer-table"><thead><tr><th scope="col">نام / کسب‌وکار</th><th scope="col">تلفن</th><th scope="col">وضعیت</th><th scope="col">مسئول</th><th scope="col">عملیات</th></tr></thead>
+      <tbody>{% for customer in customers %}<tr>
+        <td><a href="{% url 'crm:customer_detail' customer.pk %}">{{ customer.name|default:'بدون نام' }}</a>{% if customer.business_name %}<small>{{ customer.business_name }}</small>{% endif %}{% if customer.restored_from == 'archive' %}<small class="restore-origin">از بایگانی برگشته</small>{% elif customer.restored_from == 'trash' %}<small class="restore-origin">از زباله‌دان برگشته</small>{% endif %}</td>
+        <td>{{ customer.phone|default:'—' }}</td><td>{{ customer.get_status_display }}</td><td>{{ customer.assignee.get_username|default:'—' }}</td>
+        <td class="row-actions">{% if current_page == 'customer_archive' or current_page == 'customer_trash' %}<form method="post" action="{% url 'crm:customer_restore' customer.pk %}">{% csrf_token %}<button type="submit">بازیابی</button></form>{% else %}<a href="{% url 'crm:customer_update' customer.pk %}">ویرایش</a><form method="post" action="{% url 'crm:customer_archive_action' customer.pk %}">{% csrf_token %}<button type="submit">بایگانی</button></form><form method="post" action="{% url 'crm:customer_delete' customer.pk %}">{% csrf_token %}<button type="submit">حذف</button></form>{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="5">موردی برای نمایش وجود ندارد.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
