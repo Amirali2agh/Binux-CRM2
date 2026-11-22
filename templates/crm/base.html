@@ -41,6 +41,7 @@
           <span class="group-label">{{ nav_section.title }}</span>
           <svg class="icon chevron" aria-hidden="true"><use href="#icon-chevron"/></svg>
         </button>
+        <div class="group-title-nojs"><svg class="icon group-icon" aria-hidden="true"><use href="#icon-{{ nav_section.icon }}"/></svg><span>{{ nav_section.title }}</span></div>
         <div class="submenu" id="submenu-{{ nav_section.slug }}">
           {% for item in nav_section.pages %}
           <a href="{% url 'crm:'|add:item.name %}"{% if item.name == current_page %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>{{ item.title }}</span></a>
@@ -51,9 +52,9 @@
     </nav>
     <div class="sidebar-foot"><span class="foot-indicator" aria-hidden="true"></span><span class="foot-copy">محیط آموزشی · داده‌ها ساختگی‌اند</span></div>
   </aside>
-  <button class="sidebar-backdrop" type="button" aria-label="بستن منو" hidden></button>
+  <button class="sidebar-backdrop" type="button" aria-label="بستن منو" tabindex="-1" hidden></button>
   <div class="workspace">
-    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><span class="topbar-status"><span aria-hidden="true"></span>نسخهٔ نمایشی</span></header>
+    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><div class="topbar-placeholders"><span class="topbar-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></span><span class="topbar-account"><span class="topbar-avatar" aria-hidden="true">ب</span><span>حساب نمایشی</span></span></div><span class="topbar-status"><span aria-hidden="true"></span>نسخهٔ نمایشی</span></header>
     <main class="main-content" id="main">
       <div class="breadcrumbs"><span>فضای کاری</span><span aria-hidden="true">/</span><span>{{ section.title }}</span></div>
       {% block content %}{% endblock %}

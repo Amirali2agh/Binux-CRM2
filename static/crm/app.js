@@ -6,15 +6,20 @@
   const open = document.querySelector(".mobile-menu");
   const close = document.querySelector(".sidebar-close");
   const backdrop = document.querySelector(".sidebar-backdrop");
+  const workspace = document.querySelector(".workspace");
   const mobile = matchMedia("(max-width: 760px)");
 
   function setMobileOpen(value) {
+    const restoreFocus = sidebar.contains(document.activeElement);
     sidebar.classList.toggle("is-mobile-open", value);
     open.setAttribute("aria-expanded", String(value));
     sidebar.inert = mobile.matches && !value;
+    workspace.inert = mobile.matches && value;
     backdrop.hidden = !value;
     document.body.style.overflow = value ? "hidden" : "";
-    if (!value && sidebar.contains(document.activeElement)) open.focus();
+    if (value) close.focus();
+    else if (mobile.matches && restoreFocus) open.focus();
+    else if (!mobile.matches && restoreFocus) collapse.focus();
   }
 
   function setCollapsed(value) {
@@ -57,8 +62,23 @@
   close.addEventListener("click", () => setMobileOpen(false));
   backdrop.addEventListener("click", () => setMobileOpen(false));
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && sidebar.classList.contains("is-mobile-open"))
+    if (!sidebar.classList.contains("is-mobile-open")) return;
+    if (event.key === "Escape") {
       setMobileOpen(false);
+    } else if (event.key === "Tab") {
+      const focusable = [...sidebar.querySelectorAll("a[href], button")].filter(
+        (element) => !element.closest("[hidden]") && element.getClientRects().length,
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
   });
   sidebar.querySelectorAll(".submenu a").forEach((link) => {
     link.addEventListener("click", () => {

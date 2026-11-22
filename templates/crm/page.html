@@ -14,7 +14,11 @@
   {% elif page.kind == 'calendar' %}
   <div class="calendar-preview"><div class="calendar-day"><span>روز نمایشی</span><strong>۰۱</strong><small>برنامهٔ آزمایشی</small></div><div class="calendar-event"><span class="event-time">۱۰:۰۰</span><div><strong>{{ page.rows.0.0 }}</strong><p>{{ page.rows.0.1 }}</p><small>{{ page.rows.0.2 }}</small></div></div></div>
   {% elif page.kind == 'contract' %}
-  {% if page.archive_title %}<p class="archive-line">{{ page.archive_title }} · بایگانی آزمایشی</p>{% endif %}
+  {% if page.archive_title %}
+  <ul class="contract-archive"><li><div><strong>{{ page.archive_title }}</strong><small>شناسهٔ DEMO-01 · بایگانی آزمایشی</small></div><span class="sample-tag">نمونه</span></li></ul>
+  {% else %}
+  <article class="contract-document" aria-label="متن پیش‌نویس نمایشی"><h3>موضوع قرارداد نمونه</h3><p>این پیش‌نویس فقط برای نمایش چیدمان متن قرارداد است. شرح خدمات، تعهدات، مبلغ و امضا هنوز تعیین نشده‌اند و هیچ سندی ذخیره نمی‌شود.</p></article>
+  {% endif %}
   {% include 'crm/partials/contract_preview.html' %}
   {% else %}
   <div class="empty-state"><svg class="icon empty-symbol" aria-hidden="true"><use href="#icon-empty"/></svg><h3>{{ page.empty }}</h3><p>پس از طراحی گردش کار پیگیری، موارد اینجا نمایش داده می‌شوند.</p></div>

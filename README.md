@@ -14,6 +14,8 @@ python3 -m venv .venv
 
 If the host lacks `venv`, `uv venv --python 3.11 .venv` and `uv pip install --python .venv/bin/python -r requirements.txt` work too. Visit `http://127.0.0.1:8000/`. To run the tests: `.venv/bin/python manage.py test`. No migration command is necessary: there are no models or configured databases.
 
+For optional desktop/mobile keyboard and no-JavaScript browser checks, install `playwright` in the local environment and run `.venv/bin/python scripts/browser_smoke.py` while the Django server is running. Point `CHROME_PATH` at an installed Chrome/Chromium binary if it is not at `/usr/bin/google-chrome`; use `CRM_BASE_URL` if the server is not on port 8000. This browser dependency is deliberately not required to serve the app.
+
 **Local preview only.** `config/settings.py` deliberately enables debug and uses an unsafe local secret. Never expose this server publicly or deploy these settings. Production needs separate security, authentication, storage, and deployment decisions.
 
 ## Follow one Django request (#1–#2)

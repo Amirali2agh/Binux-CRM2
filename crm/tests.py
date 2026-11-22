@@ -36,7 +36,8 @@ class DisplayOnlyPagesTests(SimpleTestCase):
                     response, f'<h1 id="page-title">{heading}</h1>', html=True
                 )
                 self.assertContains(response, 'data-demo="true"')
-                self.assertContains(response, 'aria-current="page"')
+                self.assertContains(response, f'href="{url}" aria-current="page"')
+                self.assertEqual(response.content.decode().count('aria-current="page"'), 1)
                 self.assertContains(response, group)
                 self.assertNotContains(response, "<form")
                 self.assertEqual(self.client.post(url).status_code, 405)
@@ -85,3 +86,14 @@ class DisplayOnlyPagesTests(SimpleTestCase):
         ):
             with self.subTest(name=name):
                 self.assertContains(self.client.get(reverse(f"crm:{name}")), marker)
+
+    def test_finance_and_contract_previews_show_both_sides_and_distinct_content(self):
+        self.assertContains(self.client.get(reverse("crm:creditors_debtors")), "دریافتنی")
+        self.assertContains(self.client.get(reverse("crm:creditors_debtors")), "پرداختنی")
+        draft = self.client.get(reverse("crm:contract_draft"))
+        archive = self.client.get(reverse("crm:contract_archive"))
+        self.assertContains(draft, "موضوع قرارداد نمونه")
+        self.assertContains(archive, '<ul class="contract-archive">')
+        self.assertContains(archive, "قرارداد نمونه")
+        self.assertNotContains(draft, '<form')
+        self.assertNotContains(archive, '<form')
