@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - crm_data:/data
+    environment:
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-local-demo-only}
+      DJANGO_DB_PATH: /data/db.sqlite3
+
+volumes:
+  crm_data:

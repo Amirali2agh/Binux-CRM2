@@ -23,17 +23,26 @@ from .models import Customer
 
 class TeamLoginView(LoginView):
     template_name = "crm/login.html"
+    redirect_authenticated_user = True
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        section, page = PAGES["customer_list"]
-        context.update(
-            sections=SECTIONS,
-            section=section,
-            page=page,
-            current_page="customer_list",
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields["username"].widget.attrs.update(
+            {
+                "class": "login-input",
+                "autocomplete": "username",
+                "autofocus": "autofocus",
+                "dir": "auto",
+            }
         )
-        return context
+        form.fields["password"].widget.attrs.update(
+            {
+                "class": "login-input",
+                "autocomplete": "current-password",
+                "dir": "ltr",
+            }
+        )
+        return form
 
 
 def _active_customers():
@@ -57,6 +66,7 @@ def _customer_context(title, customers, *, page_key="customer_list"):
     }
 
 
+@login_required
 @require_safe
 def display_page(request, page_key):
     section, page = PAGES[page_key]

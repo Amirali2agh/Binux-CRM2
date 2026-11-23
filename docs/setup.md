@@ -30,7 +30,46 @@ uv pip install --python .venv/bin/python -r requirements.txt
 .venv/bin/python manage.py runserver 127.0.0.1:8000
 ```
 
-Open `http://127.0.0.1:8000/`. The current version is a local display-only demo, not a production deployment. Do not expose it publicly: its settings enable debug mode and use an unsafe local fallback secret.
+Open `http://127.0.0.1:8000/`. The CRM login screen is shown first; after successful team sign-in the requested page opens. The current version is a local display-only demo, not a production deployment. Do not expose it publicly: its settings enable debug mode and use an unsafe local fallback secret.
+
+## Local Docker development
+
+Docker support is for local development only. It uses Django's development server, the existing local-only fallback secret when `DJANGO_SECRET_KEY` is not set, and SQLite; it is not a production setup. The lifecycle management command still needs a separately selected scheduler (tracked in issue #10), which this setup does not configure or run.
+
+From the repository root, build the image and initialize the SQLite database in the Compose named volume:
+
+```bash
+docker compose build
+docker compose run --rm web python manage.py migrate
+```
+
+Optionally create an administrator for `/admin/`:
+
+```bash
+docker compose run --rm web python manage.py createsuperuser
+```
+
+Start the development server and open `http://localhost:8000/`:
+
+```bash
+docker compose up
+```
+
+The project directory is bind-mounted at `/app`, so local code edits are visible in the container. SQLite is stored at `/data/db.sqlite3` in the named `crm_data` volume and survives ordinary container recreation. Stop with `Ctrl+C`, then run:
+
+```bash
+docker compose down
+```
+
+Do not use `docker compose down -v` unless you intentionally want to delete the local database volume. Compose reads `DJANGO_DEBUG` and `DJANGO_SECRET_KEY` from the environment (or a root `.env` file); `.env` is ignored by Git and Docker. The fallback secret is only for local development; never expose this server publicly.
+
+Run the Django tests in the container with:
+
+```bash
+docker compose run --rm web python manage.py test
+```
+
+Compare with the regular local test command in the Verification section below. The default SQLite location remains `db.sqlite3` beside the code when `DJANGO_DB_PATH` is not set.
 
 ## Verification
 
