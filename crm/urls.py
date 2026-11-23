@@ -16,6 +16,11 @@ urlpatterns = [
     path("customers/archive/", views.customer_archive, name="customer_archive"),
     path("customers/trash/", views.customer_trash, name="customer_trash"),
     path("customers/<int:pk>/", views.customer_detail, name="customer_detail"),
+    path(
+        "customers/<int:pk>/calls/<int:call_pk>/outcome/",
+        views.call_outcome_update,
+        name="call_outcome_update",
+    ),
     path("customers/<int:pk>/edit/", views.customer_update, name="customer_update"),
     path("customers/<int:pk>/delete/", views.customer_delete, name="customer_delete"),
     path("customers/<int:pk>/archive/", views.customer_archive_action, name="customer_archive_action"),

@@ -4,4 +4,29 @@
 <section class="display-surface customer-detail-surface"><dl class="customer-details">
   <div><dt>نوع کسب‌وکار</dt><dd>{{ customer.business_type|default:'—' }}</dd></div><div><dt>نام کسب‌وکار</dt><dd>{{ customer.business_name|default:'—' }}</dd></div><div><dt>شماره تلفن</dt><dd>{{ customer.phone|default:'—' }}</dd></div><div><dt>وضعیت</dt><dd>{{ customer.get_status_display }}</dd></div><div><dt>منبع</dt><dd>{{ customer.get_source_display|default:'—' }}</dd></div><div><dt>مسئول</dt><dd>{{ customer.assignee.get_username|default:'—' }}</dd></div><div><dt>نشانی</dt><dd>{{ customer.address|default:'—' }}</dd></div><div><dt>یادداشت</dt><dd>{{ customer.notes|default:'—' }}</dd></div>
 </dl><div class="form-actions"><a class="secondary-action" href="{% url 'crm:customer_list' %}">بازگشت به فهرست</a>{% if is_customer_archived or is_customer_trashed %}<form method="post" action="{% url 'crm:customer_restore' customer.pk %}">{% csrf_token %}<button type="submit">بازیابی</button></form>{% else %}<form method="post" action="{% url 'crm:customer_archive_action' customer.pk %}">{% csrf_token %}<button type="submit">بایگانی</button></form><form method="post" action="{% url 'crm:customer_delete' customer.pk %}">{% csrf_token %}<button type="submit">انتقال به زباله‌دان</button></form>{% endif %}</div></section>
+<section class="display-surface" aria-labelledby="call-history-title">
+  <div class="surface-heading"><h2 id="call-history-title">تاریخچهٔ تماس‌ها</h2></div>
+  <div class="table-wrap customer-table-wrap">
+    <table class="customer-table">
+      <thead><tr><th scope="col">زمان</th><th scope="col">شمارهٔ گرفته‌شده</th><th scope="col">نتیجهٔ تماس</th></tr></thead>
+      <tbody>{% for call in customer.call_records.all %}
+        <tr>
+          <td>{{ call.called_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ call.dialed_number }}</td>
+          <td>
+            <form class="row-actions" method="post" action="{% url 'crm:call_outcome_update' customer.pk call.pk %}">
+              {% csrf_token %}
+              <select class="form-control" id="call-outcome-{{ call.pk }}" name="outcome" aria-label="نتیجهٔ تماس با شمارهٔ {{ call.dialed_number }}">
+                {% for value, label in call_outcome_choices %}
+                <option value="{{ value }}" {% if call.outcome == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit">ذخیره</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="3">هنوز تماسی ثبت نشده است.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}

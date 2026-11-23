@@ -16,9 +16,9 @@ from django.views.decorators.http import (
 )
 
 from .catalog import PAGES, SECTIONS
-from .forms import CustomerForm
+from .forms import CallOutcomeForm, CustomerForm
 from .jalali_calendar import build_month
-from .models import Customer
+from .models import CallRecord, Customer
 
 
 class TeamLoginView(LoginView):
@@ -229,7 +229,8 @@ def customer_create(request):
 @require_safe
 def customer_detail(request, pk):
     customer = get_object_or_404(
-        Customer.objects.select_related("assignee"), pk=pk
+        Customer.objects.select_related("assignee").prefetch_related("call_records"),
+        pk=pk,
     )
     auto_archive_due = (
         customer.status == Customer.Status.REJECTED
@@ -242,8 +243,21 @@ def customer_detail(request, pk):
             "customer": customer,
             "is_customer_archived": bool(customer.archived_at or auto_archive_due),
             "is_customer_trashed": bool(customer.trashed_at),
+            "call_outcome_choices": CallRecord.Outcome.choices,
         },
     )
+
+
+@login_required
+@require_POST
+def call_outcome_update(request, pk, call_pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    call = get_object_or_404(CallRecord, pk=call_pk, customer=customer)
+    form = CallOutcomeForm(request.POST, instance=call)
+    if not form.is_valid():
+        return HttpResponseBadRequest("نتیجهٔ تماس معتبر نیست.".encode())
+    form.save()
+    return redirect("crm:customer_detail", pk=customer.pk)
 
 
 @login_required
