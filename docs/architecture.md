@@ -2,12 +2,12 @@
 
 ## Current application (verified in the repository)
 
-The current app is a server-rendered Django site. Customer records persist in the configured local SQLite database; Django authentication protects all customer-data routes. The non-customer roadmap pages remain display-only and use clearly fictional examples.
+The current app is a server-rendered Django site. Customer records persist in the configured local SQLite database. Every CRM application page requires a Django team session, including display-only roadmap destinations; the public login screen is the only application page available before sign-in. Django admin retains its separate authentication. Non-customer roadmap pages remain display-only and use clearly fictional examples.
 
 A request follows this path:
 
 1. `config/urls.py` includes the CRM URL configuration.
-2. `crm/urls.py` defines named routes for the roadmap pages and customer workflow; customer routes require authentication.
+2. `crm/urls.py` defines named CRM routes; `login_required` protects the application views, while the login and logout routes remain separately available.
 3. `crm/views.py` resolves pages or filters customer records; `crm/forms.py` validates customer input.
 4. `crm/models.py` stores customer fields, assignment, lifecycle timestamps, and database constraints; `crm/catalog.py` holds the remaining static demo content and shared menu.
 5. `templates/crm/base.html` renders the shared shell; customer templates render forms and filtered lists; `static/crm/app.css` and `static/crm/app.js` provide styling and navigation behavior.

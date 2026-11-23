@@ -34,22 +34,101 @@ PAGES = (
 )
 
 
+class LoginGateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="login-gate-user", password="safe-test-password"
+        )
+
+    def test_anonymous_visitors_are_redirected_from_every_crm_page(self):
+        for name, _, _ in PAGES:
+            with self.subTest(name=name):
+                response = self.client.get(reverse(f"crm:{name}"))
+                self.assertEqual(response.status_code, 302)
+                self.assertTrue(response.url.startswith(reverse("login")))
+
+    def test_root_lands_on_standalone_public_login_page(self):
+        response = self.client.get("/", follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "crm/login.html")
+        self.assertContains(response, "ورود اعضای تیم")
+        self.assertNotContains(response, "sidebar-nav")
+        self.assertNotContains(response, "موجودی دفتر")
+        self.assertEqual(response.context["next"], reverse("crm:office_inventory"))
+
+        response = self.client.post(
+            reverse("login"),
+            {
+                "username": "login-gate-user",
+                "password": "safe-test-password",
+                "next": response.context["next"],
+            },
+        )
+        self.assertRedirects(response, reverse("crm:office_inventory"))
+
+    def test_login_returns_to_requested_page_and_authenticated_user_skips_login(self):
+        destination = reverse("crm:office_inventory")
+        response = self.client.get(destination)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(destination, response.url)
+
+        response = self.client.post(
+            reverse("login"),
+            {
+                "username": "login-gate-user",
+                "password": "safe-test-password",
+                "next": destination,
+            },
+        )
+        self.assertRedirects(response, destination)
+        self.assertEqual(self.client.get(destination).status_code, 200)
+        self.assertRedirects(
+            self.client.get(reverse("login")), reverse("crm:customer_list")
+        )
+
+    def test_login_rejects_untrusted_next_and_uses_default_destination(self):
+        for next_url in ("https://example.invalid/", "//example.invalid/"):
+            with self.subTest(next_url=next_url):
+                response = self.client.post(
+                    reverse("login"),
+                    {
+                        "username": "login-gate-user",
+                        "password": "safe-test-password",
+                        "next": next_url,
+                    },
+                )
+                self.assertRedirects(response, reverse("crm:customer_list"))
+                self.client.logout()
+
+    def test_admin_retains_its_own_anonymous_login(self):
+        response = self.client.get(reverse("admin:index"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("admin:login"), response.url)
+        admin_login = self.client.get(reverse("admin:login"))
+        self.assertEqual(admin_login.status_code, 200)
+        self.assertTemplateUsed(admin_login, "admin/login.html")
+
+    def test_invalid_credentials_show_an_accessible_error(self):
+        response = self.client.post(
+            reverse("login"),
+            {"username": "login-gate-user", "password": "wrong-password"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'role="alert"')
+        self.assertContains(response, "نام کاربری یا گذرواژه درست نیست.")
+
+
 class DisplayOnlyPagesTests(TestCase):
     def setUp(self):
-        from django.contrib.auth import get_user_model
-
         self.user = get_user_model().objects.create_user(
             username="demo-reader", password="safe-test-password"
         )
+        self.client.force_login(self.user)
 
     def test_all_17_named_routes_render_distinct_demo_pages(self):
         destinations = set()
         for name, heading, group in PAGES:
             with self.subTest(name=name):
-                if name in {"customer_list", "follow_ups", "calendar"}:
-                    self.client.force_login(self.user)
-                else:
-                    self.client.logout()
                 url = reverse(f"crm:{name}")
                 self.assertNotIn(url, destinations)
                 destinations.add(url)
@@ -64,7 +143,8 @@ class DisplayOnlyPagesTests(TestCase):
                 self.assertEqual(response.content.decode().count('aria-current="page"'), 1)
                 self.assertContains(response, group)
                 if name not in {"customer_list", "follow_ups", "calendar"}:
-                    self.assertNotContains(response, "<form")
+                    self.assertEqual(response.content.count(b"<form"), 1)
+                    self.assertContains(response, 'class="logout-form"')
                 self.assertEqual(self.client.post(url).status_code, 405)
         self.assertEqual(len(destinations), 17)
 
@@ -113,10 +193,6 @@ class DisplayOnlyPagesTests(TestCase):
             ("expirations", "انقضای نمونه"),
         ):
             with self.subTest(name=name):
-                if name == "follow_ups":
-                    self.client.force_login(self.user)
-                else:
-                    self.client.logout()
                 self.assertContains(self.client.get(reverse(f"crm:{name}")), marker)
 
     def test_finance_and_contract_previews_show_both_sides_and_distinct_content(self):
@@ -127,8 +203,10 @@ class DisplayOnlyPagesTests(TestCase):
         self.assertContains(draft, "موضوع قرارداد نمونه")
         self.assertContains(archive, '<ul class="contract-archive">')
         self.assertContains(archive, "قرارداد نمونه")
-        self.assertNotContains(draft, '<form')
-        self.assertNotContains(archive, '<form')
+        self.assertEqual(draft.content.count(b"<form"), 1)
+        self.assertContains(draft, 'class="logout-form"')
+        self.assertEqual(archive.content.count(b"<form"), 1)
+        self.assertContains(archive, 'class="logout-form"')
 
 
 class JalaliCalendarTests(TestCase):
@@ -426,7 +504,7 @@ class CustomerWorkflowTests(TestCase):
         login_page = self.client.get(reverse("login"))
         self.assertEqual(login_page.status_code, 200)
         self.assertContains(login_page, "ورود اعضای تیم")
-        self.assertContains(login_page, reverse("crm:customer_list"))
+        self.assertNotContains(login_page, "sidebar-nav")
         response = self.client.post(
             reverse("login"),
             {"username": "team-member", "password": "safe-test-password"},

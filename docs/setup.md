@@ -30,7 +30,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 .venv/bin/python manage.py runserver 127.0.0.1:8000
 ```
 
-Open `http://127.0.0.1:8000/`. The current version is a local display-only demo, not a production deployment. Do not expose it publicly: its settings enable debug mode and use an unsafe local fallback secret.
+Open `http://127.0.0.1:8000/`. The CRM login screen is shown first; after successful team sign-in the requested page opens. The current version is a local display-only demo, not a production deployment. Do not expose it publicly: its settings enable debug mode and use an unsafe local fallback secret.
 
 ## Local Docker development
 
