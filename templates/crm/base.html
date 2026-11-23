@@ -31,7 +31,7 @@
       <button class="sidebar-collapse" type="button" aria-label="جمع‌کردن سایدبار" aria-controls="sidebar" aria-expanded="true" title="جمع‌کردن سایدبار"><svg class="icon"><use href="#icon-panel"/></svg></button>
       <button class="sidebar-close" type="button" aria-label="بستن منو"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
     </div>
-    <div class="sidebar-profile"><span class="avatar" aria-hidden="true">ب</span><span class="profile-copy"><strong>حساب نمایشی</strong><small>بدون ورود کاربر</small></span></div>
+    <div class="sidebar-profile"><span class="avatar" aria-hidden="true">ب</span><span class="profile-copy"><strong>{% if request.user.is_authenticated %}{{ request.user.get_username }}{% else %}بازدیدکننده{% endif %}</strong><small>{% if request.user.is_authenticated %}عضو تیم{% else %}برای مشتریان وارد شوید{% endif %}</small></span></div>
     <div class="search-placeholder" role="note"><svg class="icon search-symbol" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></div>
     <nav class="sidebar-nav" aria-label="بخش‌های CRM">
       {% for nav_section in sections %}
@@ -54,7 +54,7 @@
   </aside>
   <button class="sidebar-backdrop" type="button" aria-label="بستن منو" tabindex="-1" hidden></button>
   <div class="workspace">
-    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><div class="topbar-placeholders"><span class="topbar-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></span><span class="topbar-account"><span class="topbar-avatar" aria-hidden="true">ب</span><span>حساب نمایشی</span></span></div><span class="topbar-status"><span aria-hidden="true"></span>نسخهٔ نمایشی</span></header>
+    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><div class="topbar-placeholders"><span class="topbar-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></span><span class="topbar-account"><span class="topbar-avatar" aria-hidden="true">ب</span><span>{% if request.user.is_authenticated %}{{ request.user.get_username }}{% else %}ورود به بخش مشتریان{% endif %}</span></span>{% if request.user.is_authenticated %}<form method="post" action="{% url 'logout' %}" class="logout-form">{% csrf_token %}<button type="submit">خروج</button></form>{% else %}<a class="login-link" href="{% url 'login' %}">ورود</a>{% endif %}</div><span class="topbar-status"><span aria-hidden="true"></span>{% if request.user.is_authenticated %}بخش داخلی{% else %}نسخهٔ نمایشی{% endif %}</span></header>
     <main class="main-content" id="main">
       <div class="breadcrumbs"><span>فضای کاری</span><span aria-hidden="true">/</span><span>{{ section.title }}</span></div>
       {% block content %}{% endblock %}
