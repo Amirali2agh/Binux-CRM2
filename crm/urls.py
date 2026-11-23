@@ -7,6 +7,7 @@ from .catalog import SECTIONS
 app_name = "crm"
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="crm:office_inventory", permanent=False), name="home"),
+    path("internal/calendar/", views.calendar_view, name="calendar"),
     path("customers/", views.customer_list, name="customer_list"),
     path("customers/follow-ups/", views.customer_follow_ups, name="follow_ups"),
     path("customers/new/", views.customer_create, name="customer_create"),
@@ -23,7 +24,7 @@ urlpatterns = [
 for section in SECTIONS:
     for page in section["pages"]:
         if page["name"] in {
-            "customer_list", "follow_ups", "tasks", "completed_customers",
+            "calendar", "customer_list", "follow_ups", "tasks", "completed_customers",
             "customer_archive", "customer_trash",
         }:
             continue

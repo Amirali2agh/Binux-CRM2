@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import CustomerForm
+from .jalali_calendar import build_month
 from .models import Customer
 
 PAGES = (
@@ -45,7 +46,7 @@ class DisplayOnlyPagesTests(TestCase):
         destinations = set()
         for name, heading, group in PAGES:
             with self.subTest(name=name):
-                if name in {"customer_list", "follow_ups"}:
+                if name in {"customer_list", "follow_ups", "calendar"}:
                     self.client.force_login(self.user)
                 else:
                     self.client.logout()
@@ -57,12 +58,12 @@ class DisplayOnlyPagesTests(TestCase):
                 self.assertContains(
                     response, f'<h1 id="page-title">{heading}</h1>', html=True
                 )
-                if name not in {"customer_list", "follow_ups"}:
+                if name not in {"customer_list", "follow_ups", "calendar"}:
                     self.assertContains(response, 'data-demo="true"')
                 self.assertContains(response, f'href="{url}" aria-current="page"')
                 self.assertEqual(response.content.decode().count('aria-current="page"'), 1)
                 self.assertContains(response, group)
-                if name not in {"customer_list", "follow_ups"}:
+                if name not in {"customer_list", "follow_ups", "calendar"}:
                     self.assertNotContains(response, "<form")
                 self.assertEqual(self.client.post(url).status_code, 405)
         self.assertEqual(len(destinations), 17)
@@ -103,7 +104,6 @@ class DisplayOnlyPagesTests(TestCase):
     def test_section_examples_and_empty_states(self):
         for name, marker in (
             ("office_inventory", "صندلی اداری"),
-            ("calendar", "رویداد نمونه"),
             ("receipts_payments", "دریافت نمونه"),
             ("profit_sharing", "سهم نمونه"),
             ("follow_ups", "موردی برای نمایش وجود ندارد"),
@@ -129,6 +129,83 @@ class DisplayOnlyPagesTests(TestCase):
         self.assertContains(archive, "قرارداد نمونه")
         self.assertNotContains(draft, '<form')
         self.assertNotContains(archive, '<form')
+
+
+class JalaliCalendarTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="calendar-reader", password="safe-test-password"
+        )
+        self.client.force_login(self.user)
+
+    def test_calendar_requires_authentication(self):
+        self.client.logout()
+        response = self.client.get(reverse("crm:calendar"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+
+    def test_calendar_renders_jalali_month_with_leap_day_and_empty_state(self):
+        response = self.client.get(reverse("crm:calendar"), {"month": "1403-12"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "اسفند ۱۴۰۳")
+        self.assertContains(response, "۳۰")
+        self.assertContains(response, "در این ماه رویدادی ثبت نشده است")
+        self.assertContains(response, "رویدادی ثبت نشده")
+        self.assertContains(response, 'dir="rtl"')
+        self.assertNotContains(response, "رویداد نمونه")
+        self.assertNotContains(response, "جلسهٔ آزمایشی تیم")
+
+    def test_calendar_grid_starts_on_saturday_and_marks_fridays(self):
+        response = self.client.get(reverse("crm:calendar"), {"month": "1403-01"})
+        html = response.content.decode()
+        self.assertLess(html.index(">شنبه</th>"), html.index(">یک‌شنبه</th>"))
+        self.assertLess(html.index(">پنج‌شنبه</th>"), html.index(">جمعه</th>"))
+        self.assertContains(response, 'class="calendar-day calendar-day--friday"')
+        self.assertContains(response, 'aria-label="جمعه ۳ فروردین ۱۴۰۳"')
+
+    def test_official_holiday_marker_has_distinct_calendar_presentation(self):
+        from unittest.mock import patch
+
+        month_data = build_month(
+            1403, 1, holidays_by_jalali_date={"1403-01-01": ("تعطیلی آزمایشی",)}
+        )
+        with patch("crm.views.build_month", return_value=month_data):
+            response = self.client.get(
+                reverse("crm:calendar"), {"month": "1403-01"}
+            )
+        self.assertContains(
+            response, 'class="calendar-day calendar-day--holiday"'
+        )
+        self.assertContains(response, "تعطیلی آزمایشی")
+        self.assertContains(response, "calendar-holiday-swatch")
+
+    def test_previous_next_and_today_navigation_preserve_jalali_months(self):
+        response = self.client.get(reverse("crm:calendar"), {"month": "1403-01"})
+        self.assertContains(response, 'href="?month=1402-12"')
+        self.assertContains(response, 'href="?month=1403-02"')
+        self.assertContains(response, 'href="/internal/calendar/"')
+
+    def test_default_month_uses_tehran_local_date(self):
+        from datetime import datetime, timezone as datetime_timezone
+        from unittest.mock import patch
+
+        instant = datetime(2024, 3, 19, 20, 30, tzinfo=datetime_timezone.utc)
+        with patch("crm.views.timezone.now", return_value=instant):
+            response = self.client.get(reverse("crm:calendar"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "فروردین ۱۴۰۳")
+        self.assertContains(response, 'href="?month=1403-02"')
+
+    def test_common_year_esfand_has_no_thirtieth_day_and_crosses_year_boundary(self):
+        response = self.client.get(reverse("crm:calendar"), {"month": "1402-12"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'aria-label="سه‌شنبه ۲۹ اسفند ۱۴۰۲"')
+        self.assertNotContains(response, 'aria-label="چهارشنبه ۳۰ اسفند ۱۴۰۲"')
+        self.assertContains(response, 'href="?month=1403-01"')
+
+    def test_invalid_month_query_returns_bad_request(self):
+        response = self.client.get(reverse("crm:calendar"), {"month": "1403-13"})
+        self.assertEqual(response.status_code, 400)
 
 
 class CustomerWorkflowTests(TestCase):
