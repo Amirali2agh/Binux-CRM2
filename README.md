@@ -1,6 +1,6 @@
 # Binux CRM
 
-A Persian RTL, learning-first Django CRM for internal customer and work management. The customer workflow now stores records in SQLite and requires team login; the other menu destinations remain display-only with fictional data. See `AGENTS.md`, `PRODUCT.md`, and `docs/` for project rules, architecture, setup, and the agreed customer lifecycle.
+A Persian RTL, learning-first Django CRM for internal customer and work management. The customer workflow stores records in SQLite and requires team login; every CRM page, including display-only roadmap destinations, is available only after team sign-in. See `AGENTS.md`, `PRODUCT.md`, and `docs/` for project rules, architecture, setup, and the agreed customer lifecycle.
 
 ## Run locally
 
@@ -30,7 +30,7 @@ For optional desktop/mobile keyboard and no-JavaScript browser checks, install `
 
 ## Customer workflow request path (#4)
 
-1. The user signs in with a Django account created by an administrator; customer routes use `login_required`.
+1. Every CRM application page requires a Django team session. An anonymous request is redirected to the public login page with its requested destination preserved; Django admin uses its own login.
 2. `crm/urls.py` maps the customer list/form to `crm/views.py`; `CustomerForm` validates fields and requires an assignee when status is `ارسالی`.
 3. `crm/models.py` persists the customer and status timestamps in SQLite; the database constraint also rejects `ارسالی` without an assignee.
 4. Customer list, Follow-up, Tasks, Completed, Archive, and Trash views filter separate lifecycle states and render the customer templates under `templates/crm/`.

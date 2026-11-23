@@ -1,9 +1,48 @@
-{% extends 'crm/base.html' %}
-{% block content %}
-<section class="display-surface login-surface"><div class="surface-heading"><h1>ورود اعضای تیم</h1></div><form method="post" class="login-form">{% csrf_token %}
-  {% if form.errors %}<p class="form-errors" role="alert">نام کاربری یا گذرواژه درست نیست.</p>{% endif %}
-  <div class="field-row"><label for="id_username">نام کاربری</label>{{ form.username }}</div>
-  <div class="field-row"><label for="id_password">گذرواژه</label>{{ form.password }}</div>
-  <input type="hidden" name="next" value="{{ next }}"><button class="primary-action" type="submit">ورود</button>
-</form></section>
-{% endblock %}
+{% load static %}
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17223a">
+  <title>ورود اعضای تیم | Binux CRM</title>
+  <link rel="icon" href="{% static 'crm/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'crm/app.css' %}">
+  <link rel="stylesheet" href="{% static 'crm/login.css' %}">
+</head>
+<body class="login-page">
+  <a class="skip-link" href="#login-main">رفتن به فرم ورود</a>
+  <main class="login-layout" id="login-main">
+    <section class="login-card" aria-labelledby="login-title">
+      <a class="login-brand" href="/" aria-label="Binux CRM">
+        <span class="login-brand-symbol" aria-hidden="true">B</span>
+        <span class="login-brand-copy"><strong>BINUX CRM</strong><small>مدیریت ارتباط با مشتری</small></span>
+      </a>
+
+      <header class="login-heading">
+        <h1 id="login-title">ورود اعضای تیم</h1>
+        <p>برای ادامه به فضای کاری، وارد حساب کاربری خود شوید.</p>
+      </header>
+
+      <form method="post" class="login-form">
+        {% csrf_token %}
+        {% if form.errors %}
+          <p class="login-error" id="login-error" role="alert">نام کاربری یا گذرواژه درست نیست.</p>
+        {% endif %}
+        <div class="field-row">
+          <label for="id_username">نام کاربری</label>
+          {{ form.username }}
+        </div>
+        <div class="field-row">
+          <label for="id_password">گذرواژه</label>
+          {{ form.password }}
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="primary-action login-submit" type="submit">ورود به فضای کاری</button>
+      </form>
+
+      <p class="login-note">این سامانه برای اعضای تیم است. برای دریافت دسترسی با مدیر سامانه تماس بگیرید.</p>
+    </section>
+  </main>
+</body>
+</html>
