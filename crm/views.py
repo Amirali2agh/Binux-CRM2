@@ -1,8 +1,12 @@
+import re
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
+import jdatetime
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Q
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import (
@@ -13,6 +17,7 @@ from django.views.decorators.http import (
 
 from .catalog import PAGES, SECTIONS
 from .forms import CustomerForm
+from .jalali_calendar import build_month
 from .models import Customer
 
 
@@ -69,6 +74,42 @@ def display_page(request, page_key):
             )
             if page["kind"] == "table"
             else (),
+        },
+    )
+
+
+@login_required
+@require_safe
+def calendar_view(request):
+    month_value = request.GET.get("month")
+    if month_value is None:
+        local_now = timezone.localtime(
+            timezone.now(), timezone=ZoneInfo("Asia/Tehran")
+        )
+        current_date = jdatetime.date.fromgregorian(
+            date=local_now.date(), locale=jdatetime.FA_LOCALE
+        )
+        year, month = current_date.year, current_date.month
+    else:
+        match = re.fullmatch(r"([0-9]{4})-(0[1-9]|1[0-2])", month_value)
+        if match is None:
+            return HttpResponseBadRequest("ماه انتخاب‌شده معتبر نیست.")
+        year, month = (int(part) for part in match.groups())
+        try:
+            jdatetime.date(year, month, 1)
+        except ValueError:
+            return HttpResponseBadRequest("ماه انتخاب‌شده معتبر نیست.")
+
+    section, page = PAGES["calendar"]
+    return render(
+        request,
+        "crm/calendar.html",
+        {
+            "sections": SECTIONS,
+            "section": section,
+            "page": page,
+            "current_page": "calendar",
+            **build_month(year, month),
         },
     )
 
