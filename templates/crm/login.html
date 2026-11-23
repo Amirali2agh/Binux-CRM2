@@ -1,0 +1,9 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="display-surface login-surface"><div class="surface-heading"><h1>ورود اعضای تیم</h1></div><form method="post" class="login-form">{% csrf_token %}
+  {% if form.errors %}<p class="form-errors" role="alert">نام کاربری یا گذرواژه درست نیست.</p>{% endif %}
+  <div class="field-row"><label for="id_username">نام کاربری</label>{{ form.username }}</div>
+  <div class="field-row"><label for="id_password">گذرواژه</label>{{ form.password }}</div>
+  <input type="hidden" name="next" value="{{ next }}"><button class="primary-action" type="submit">ورود</button>
+</form></section>
+{% endblock %}

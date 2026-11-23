@@ -1,0 +1,15 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title"><div><h1 id="page-title">{{ page.title }}</h1><p class="page-lead">همهٔ فیلدها اختیاری هستند؛ وضعیت «ارسالی» به انتخاب مسئول نیاز دارد.</p></div></section>
+<section class="display-surface customer-form-surface" aria-label="{{ page.title }}">
+  <form method="post" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="customer-fields">
+      {% for field in form %}<div class="field-row{% if field.errors %} field-invalid{% endif %}">
+        {{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<div class="field-errors" role="alert">{{ field.errors }}</div>{% endif %}
+      </div>{% endfor %}
+    </div>
+    <div class="form-actions"><button class="primary-action" type="submit">ذخیره</button><a class="secondary-action" href="{% if customer %}{% url 'crm:customer_detail' customer.pk %}{% else %}{% url 'crm:customer_list' %}{% endif %}">انصراف</a></div>
+  </form>
+</section>
+{% endblock %}

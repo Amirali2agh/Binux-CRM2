@@ -1,0 +1,48 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+  <div>
+    <h1 id="page-title">{{ page.title }}</h1>
+    <p class="page-lead">{{ page.description }}</p>
+  </div>
+</section>
+<section class="calendar-panel" aria-label="تقویم شمسی">
+  <nav class="calendar-toolbar" aria-label="پیمایش ماه تقویم">
+    {% if previous_month %}
+    <a class="calendar-nav-link" href="?month={{ previous_month }}" aria-label="رفتن به ماه قبل">ماه قبل</a>
+    {% else %}
+    <span class="calendar-nav-link is-disabled" aria-disabled="true">ماه قبل</span>
+    {% endif %}
+    <h2 class="calendar-month-title" aria-live="polite">{{ month_title }}</h2>
+    <a class="calendar-nav-link" href="{% url 'crm:calendar' %}" aria-label="رفتن به ماه جاری">امروز</a>
+    {% if next_month %}
+    <a class="calendar-nav-link" href="?month={{ next_month }}" aria-label="رفتن به ماه بعد">ماه بعد</a>
+    {% else %}
+    <span class="calendar-nav-link is-disabled" aria-disabled="true">ماه بعد</span>
+    {% endif %}
+  </nav>
+  <p class="calendar-empty" role="status" aria-live="polite">در این ماه رویدادی ثبت نشده است.</p>
+  <div class="calendar-grid-wrap">
+    <table class="jalali-calendar" aria-label="تقویم ماه {{ month_title }}">
+      <thead>
+        <tr>{% for weekday in weekdays %}<th scope="col">{{ weekday }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for week in weeks %}
+        <tr>
+          {% for cell in week %}
+          <td class="calendar-day{% if not cell.in_month %} calendar-day--outside{% endif %}{% if cell.is_friday %} calendar-day--friday{% endif %}{% if cell.is_official_holiday %} calendar-day--holiday{% endif %}">
+            <time datetime="{{ cell.date }}" aria-label="{{ cell.accessible_date }}">{{ cell.day }}</time>
+            {% if cell.in_month %}<span class="calendar-day-empty">بدون رویداد</span>{% endif %}
+            {% for holiday_name in cell.holiday_names %}<span class="calendar-holiday-name">{{ holiday_name }}</span>{% endfor %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="calendar-legend"><span class="calendar-legend-swatch" aria-hidden="true"></span>جمعه · آخر هفته</p>
+  {% if has_official_holidays %}<p class="calendar-legend"><span class="calendar-holiday-swatch" aria-hidden="true"></span>تعطیل رسمی</p>{% endif %}
+</section>
+{% endblock %}
