@@ -7,7 +7,34 @@
   const close = document.querySelector(".sidebar-close");
   const backdrop = document.querySelector(".sidebar-backdrop");
   const workspace = document.querySelector(".workspace");
+  const themeToggle = document.querySelector("[data-theme-toggle]");
+  const themeLabel = themeToggle.querySelector("[data-theme-label]");
+  const themeStorageKey = "binux-crm-theme";
   const mobile = matchMedia("(max-width: 760px)");
+
+  function setTheme(theme, persist = false) {
+    const isDark = theme === "dark";
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    themeToggle.setAttribute("aria-pressed", String(isDark));
+    themeToggle.setAttribute(
+      "aria-label",
+      isDark ? "تغییر به تم روز" : "تغییر به تم شب",
+    );
+    themeToggle.title = isDark ? "تغییر به تم روز" : "تغییر به تم شب";
+    themeLabel.textContent = isDark ? "تم روز" : "تم شب";
+    if (persist) {
+      try {
+        window.localStorage.setItem(themeStorageKey, isDark ? "dark" : "light");
+      } catch (_) {
+        // The selected theme remains active for this page if storage is unavailable.
+      }
+    }
+  }
+
+  setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+  themeToggle.addEventListener("click", () =>
+    setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true),
+  );
 
   function setMobileOpen(value) {
     const restoreFocus = sidebar.contains(document.activeElement);
