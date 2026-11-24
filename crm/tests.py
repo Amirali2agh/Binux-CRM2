@@ -15,6 +15,43 @@ from .jalali_calendar import build_month
 from .models import Customer
 
 
+class CustomerNumberMigrationTests(TransactionTestCase):
+    def test_existing_customers_are_numbered_by_creation_order(self):
+        from datetime import datetime, timezone as datetime_timezone
+
+        migrate_from = ("crm", "0007_customer_phone_secondary_customer_phone_tertiary")
+        migrate_to = ("crm", "0008_customernumbersequence_customer_customer_number_and_more")
+        executor = MigrationExecutor(connection)
+        executor.migrate([migrate_from])
+        old_customer = executor.loader.project_state([migrate_from]).apps.get_model(
+            "crm", "Customer"
+        )
+        later = old_customer.objects.create(name="Later created")
+        earlier = old_customer.objects.create(name="Earlier created")
+        old_customer.objects.filter(pk=later.pk).update(
+            created_at=datetime(2025, 1, 2, tzinfo=datetime_timezone.utc)
+        )
+        old_customer.objects.filter(pk=earlier.pk).update(
+            created_at=datetime(2025, 1, 1, tzinfo=datetime_timezone.utc)
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([migrate_to])
+        apps = executor.loader.project_state([migrate_to]).apps
+        Customer = apps.get_model("crm", "Customer")
+        Sequence = apps.get_model("crm", "CustomerNumberSequence")
+        self.assertEqual(
+            list(Customer.objects.order_by("customer_number").values_list("name", "customer_number")),
+            [("Earlier created", 1), ("Later created", 2)],
+        )
+        self.assertEqual(Sequence.objects.get(pk=1).next_number, 3)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+
 class CustomerPhoneMigrationTests(TransactionTestCase):
     migrate_from = ("crm", "0006_customer_category")
     migrate_to = ("crm", "0007_customer_phone_secondary_customer_phone_tertiary")
@@ -355,6 +392,37 @@ class CustomerWorkflowTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def test_customer_numbers_are_sequential_unique_and_displayed_with_minimum_two_digits(self):
+        first = Customer.objects.create(name="First numbered")
+        second = Customer.objects.create(name="Second numbered")
+        self.assertEqual((first.customer_number, second.customer_number), (1, 2))
+        first.delete()
+        third = Customer.objects.create(name="Third numbered")
+        self.assertEqual(third.customer_number, 3)
+
+        response = self.client.get(reverse("crm:customer_list"))
+        self.assertContains(response, "02")
+        self.assertContains(response, "03")
+
+    def test_customer_number_database_constraint_rejects_out_of_range_values(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Customer.objects.bulk_create(
+                [Customer(name="Invalid number", customer_number=10000)]
+            )
+
+    def test_customer_creation_reports_number_capacity_exhaustion(self):
+        from .models import CustomerNumberSequence
+
+        sequence = CustomerNumberSequence.objects.get(pk=1)
+        sequence.next_number = 10000
+        sequence.save(update_fields=("next_number",))
+        response = self.client.post(
+            reverse("crm:customer_create"), self.customer_data(name="At capacity")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ظرفیت شماره مشتری‌ها تکمیل شده است.")
+        self.assertFalse(Customer.objects.filter(name="At capacity").exists())
 
     def test_customer_list_filters_by_name_business_type_and_status(self):
         matching = Customer.objects.create(
