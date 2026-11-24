@@ -15,6 +15,13 @@ class Customer(models.Model):
         CALL_AGAIN = "call_again", "تماس مجدد"
         COMPLETED = "completed", "انجام شده"
 
+    class Category(models.TextChoices):
+        MICRO_BUSINESS = "micro_business", "کسب‌وکار خرد"
+        COMPANY = "company", "شرکت"
+        CRM = "crm", "مشتری CRM"
+        ERP = "erp", "مشتری ERP"
+        UNCATEGORIZED = "uncategorized", "نامشخص"
+
     class Source(models.TextChoices):
         PHONE = "phone", "تماس تلفنی"
         DIVAR = "divar", "دیوار"
@@ -28,6 +35,12 @@ class Customer(models.Model):
     name = models.CharField("نام مشتری", max_length=255, blank=True)
     business_type = models.CharField("نوع کسب‌وکار", max_length=255, blank=True)
     business_name = models.CharField("نام کسب‌وکار", max_length=255, blank=True)
+    category = models.CharField(
+        "دسته مشتری",
+        max_length=20,
+        choices=Category.choices,
+        default=Category.UNCATEGORIZED,
+    )
     phone = models.CharField("شماره تلفن", max_length=64, blank=True)
     status = models.CharField(
         "وضعیت", max_length=20, choices=Status.choices, default=Status.NO_CONTACT,

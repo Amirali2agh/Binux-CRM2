@@ -16,6 +16,18 @@ A customer is a person or business managed by the internal team. Agreed attribut
 
 All fields are optional. A missing status defaults to `بدون تماس`. Phone format and uniqueness are not validated. `ارسالی` is the exception to optional assignment: it cannot be saved without an active Django user assigned.
 
+## Customer category
+
+Each customer has exactly one category, independent of business type and customer source:
+
+- `کسب‌وکار خرد` — Micro business
+- `شرکت` — Company
+- `مشتری CRM` — CRM customer
+- `مشتری ERP` — ERP customer
+- `نامشخص` — Uncategorized; default for existing and newly created records until a team member selects a category
+
+The customer list provides an all-categories tab and one tab per category. Categories are not inferred from business type, source, or customer status.
+
 ## Customer statuses
 
 Use the exact product labels in the Persian UI. English code-facing labels below are descriptive mappings, not a mandate to change the UI wording.
