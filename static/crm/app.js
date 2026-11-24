@@ -7,7 +7,29 @@
   const close = document.querySelector(".sidebar-close");
   const backdrop = document.querySelector(".sidebar-backdrop");
   const workspace = document.querySelector(".workspace");
+  const themeToggle = document.querySelector("[data-theme-toggle]");
+  const themeState = themeToggle.querySelector("[data-theme-state]");
+  const themeStorageKey = "binux-crm-theme";
   const mobile = matchMedia("(max-width: 760px)");
+
+  function setTheme(theme, persist = false) {
+    const isDark = theme === "dark";
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    themeToggle.setAttribute("aria-checked", String(isDark));
+    themeState.textContent = isDark ? "روشن" : "خاموش";
+    if (persist) {
+      try {
+        window.localStorage.setItem(themeStorageKey, isDark ? "dark" : "light");
+      } catch (_) {
+        // The selected theme remains active for this page if storage is unavailable.
+      }
+    }
+  }
+
+  setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+  themeToggle.addEventListener("click", () =>
+    setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true),
+  );
 
   function setMobileOpen(value) {
     const restoreFocus = sidebar.contains(document.activeElement);
