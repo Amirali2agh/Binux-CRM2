@@ -8,13 +8,13 @@ A customer is a person or business managed by the internal team. Agreed attribut
 
 - Customer name
 - Business type and business name
-- Phone number
+- Primary, secondary, and tertiary phone numbers (all optional)
 - Customer status
 - Customer type/source: phone call, Divar, in person, or other
 - Address
 - Notes/description
 
-All fields are optional. A missing status defaults to `بدون تماس`. Phone format and uniqueness are not validated. `ارسالی` is the exception to optional assignment: it cannot be saved without an active Django user assigned.
+All fields are optional. A missing status defaults to `بدون تماس`. Phone numbers are stored as entered; format and uniqueness are not validated. Existing phone values remain primary numbers when optional second and third numbers are introduced. `ارسالی` is the exception to optional assignment: it cannot be saved without an active Django user assigned.
 
 ## Customer category
 
