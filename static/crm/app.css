@@ -1074,3 +1074,6 @@ html[data-theme="dark"] .customer-filter-tabs a[aria-current="page"] {
   background: #355c98;
   color: #fff;
 }
+html[data-theme="dark"] .jalali-calendar th:last-child {
+  color: #ffcccc;
+}

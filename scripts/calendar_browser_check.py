@@ -76,13 +76,15 @@ async def main():
               workspace: getComputedStyle(document.querySelector('.workspace')).backgroundColor,
               topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
               calendar: getComputedStyle(document.querySelector('.calendar-panel')).backgroundColor,
+              fridayHeader: getComputedStyle(document.querySelector('.jalali-calendar th:last-child')).color,
             })"""
         )
         assert dark_surfaces == {
             "workspace": "rgb(74, 74, 74)",
             "topbar": "rgb(74, 74, 74)",
             "calendar": "rgb(74, 74, 74)",
-        }, f"Dark theme shell surfaces are incorrect: {dark_surfaces}"
+            "fridayHeader": "rgb(255, 204, 204)",
+        }, f"Dark theme shell surfaces or Friday contrast color are incorrect: {dark_surfaces}"
 
         response = await page.goto(f"{BASE_URL}/customers/new/")
         assert response and response.status == 200
