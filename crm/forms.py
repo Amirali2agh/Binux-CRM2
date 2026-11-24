@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from .models import Customer
+from .models import CallRecord, Customer
 
 
 class CustomerForm(forms.ModelForm):
@@ -34,3 +34,10 @@ class CustomerForm(forms.ModelForm):
         if not cleaned_data.get("status"):
             cleaned_data["status"] = Customer.Status.NO_CONTACT
         return cleaned_data
+
+
+class CallOutcomeForm(forms.ModelForm):
+    class Meta:
+        model = CallRecord
+        fields = ("outcome",)
+        widgets = {"outcome": forms.Select(attrs={"class": "form-control"})}

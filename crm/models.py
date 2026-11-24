@@ -149,3 +149,23 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name or f"مشتری #{self.pk}"
+
+
+class CallRecord(models.Model):
+    class Outcome(models.TextChoices):
+        ANSWERED = "answered", "تماس پاسخ داده شده"
+        CALL_AGAIN = "call_again", "تماس مجدد"
+
+    customer = models.ForeignKey(
+        Customer,
+        verbose_name="مشتری",
+        related_name="call_records",
+        on_delete=models.CASCADE,
+    )
+    dialed_number = models.CharField("شمارهٔ گرفته‌شده", max_length=64)
+    outcome = models.CharField("نتیجهٔ تماس", max_length=20, choices=Outcome.choices)
+    called_at = models.DateTimeField("زمان تماس", default=timezone.now)
+
+    class Meta:
+        ordering = ("-called_at", "-pk")
+        indexes = [models.Index(fields=("customer", "-called_at"))]

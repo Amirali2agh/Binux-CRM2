@@ -637,3 +637,160 @@ class CustomerLifecycleCommandTests(TestCase):
             status_changed_at=now - timedelta(days=31),
         )
         self.assertFalse(expired_rejected.restore(now=now))
+
+
+class CustomerCallHistoryTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="call-history-member", password="safe-test-password"
+        )
+        self.client.force_login(self.user)
+
+    def test_call_record_stores_customer_number_and_supported_outcomes(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Call history customer")
+        call = CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-answered",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        self.assertEqual(call.customer, customer)
+        self.assertEqual(call.dialed_number, "test-dialed-number-answered")
+        self.assertEqual(
+            [label for _, label in CallRecord.Outcome.choices],
+            ["تماس پاسخ داده شده", "تماس مجدد"],
+        )
+
+    def test_customer_detail_displays_associated_calls(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="History display")
+        CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-displayed",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        response = self.client.get(reverse("crm:customer_detail", args=[customer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تاریخچهٔ تماس‌ها")
+        self.assertContains(response, "test-dialed-number-displayed")
+        self.assertContains(response, "تماس پاسخ داده شده")
+
+    def test_customer_detail_does_not_show_another_customers_calls(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Own call history")
+        other_customer = Customer.objects.create(name="Other call history")
+        CallRecord.objects.create(
+            customer=other_customer,
+            dialed_number="test-dialed-number-other-customer",
+            outcome=CallRecord.Outcome.CALL_AGAIN,
+        )
+
+        response = self.client.get(reverse("crm:customer_detail", args=[customer.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "test-dialed-number-other-customer")
+
+    def test_call_outcome_update_cannot_change_another_customers_call(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Route customer")
+        other_customer = Customer.objects.create(name="Other route customer")
+        call = CallRecord.objects.create(
+            customer=other_customer,
+            dialed_number="test-dialed-number-route-scope",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        response = self.client.post(
+            f"/customers/{customer.pk}/calls/{call.pk}/outcome/",
+            {"outcome": CallRecord.Outcome.CALL_AGAIN},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        call.refresh_from_db()
+        self.assertEqual(call.outcome, CallRecord.Outcome.ANSWERED)
+
+    def test_team_member_can_update_call_outcome_without_changing_customer_status(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(
+            name="Manual outcome update", status=Customer.Status.FOLLOW_UP
+        )
+        call = CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-update",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        response = self.client.post(
+            f"/customers/{customer.pk}/calls/{call.pk}/outcome/",
+            {"outcome": CallRecord.Outcome.CALL_AGAIN},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        call.refresh_from_db()
+        customer.refresh_from_db()
+        self.assertEqual(call.outcome, CallRecord.Outcome.CALL_AGAIN)
+        self.assertEqual(customer.status, Customer.Status.FOLLOW_UP)
+
+    def test_unknown_call_outcome_is_rejected(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Invalid outcome")
+        call = CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-invalid",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        response = self.client.post(
+            f"/customers/{customer.pk}/calls/{call.pk}/outcome/",
+            {"outcome": "unsupported"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        call.refresh_from_db()
+        self.assertEqual(call.outcome, CallRecord.Outcome.ANSWERED)
+
+    def test_call_outcome_update_requires_login(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Protected call")
+        call = CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-auth",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+        self.client.logout()
+
+        response = self.client.post(
+            f"/customers/{customer.pk}/calls/{call.pk}/outcome/",
+            {"outcome": CallRecord.Outcome.CALL_AGAIN},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+        call.refresh_from_db()
+        self.assertEqual(call.outcome, CallRecord.Outcome.ANSWERED)
+
+    def test_call_outcome_update_rejects_get(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Read-only method")
+        call = CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-dialed-number-get",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+
+        response = self.client.get(
+            f"/customers/{customer.pk}/calls/{call.pk}/outcome/"
+        )
+
+        self.assertEqual(response.status_code, 405)
