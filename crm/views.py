@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import jdatetime
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render, reverse
@@ -300,8 +301,12 @@ def customer_create(request):
         request.POST if request.method == "POST" else None
     )
     if request.method == "POST" and form.is_valid():
-        customer = form.save()
-        return redirect("crm:customer_detail", pk=customer.pk)
+        try:
+            customer = form.save()
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            return redirect("crm:customer_detail", pk=customer.pk)
     return render(
         request, "crm/customer_form.html",
         _customer_context("ثبت مشتری", (), page_key="customer_create") | {"form": form},

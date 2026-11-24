@@ -2,8 +2,12 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
+
+
+class CustomerNumberSequence(models.Model):
+    next_number = models.PositiveSmallIntegerField(default=1)
 
 
 class Customer(models.Model):
@@ -32,6 +36,9 @@ class Customer(models.Model):
         ARCHIVE = "archive", "بایگانی"
         TRASH = "trash", "زباله‌دان"
 
+    customer_number = models.PositiveSmallIntegerField(
+        "شماره مشتری", unique=True, editable=False
+    )
     name = models.CharField("نام مشتری", max_length=255, blank=True)
     business_type = models.CharField("نوع کسب‌وکار", max_length=255, blank=True)
     business_name = models.CharField("نام کسب‌وکار", max_length=255, blank=True)
@@ -77,6 +84,10 @@ class Customer(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
+                condition=models.Q(customer_number__gte=1, customer_number__lte=9999),
+                name="customer_number_in_range",
+            ),
+            models.CheckConstraint(
                 condition=~models.Q(status="sent") | models.Q(assignee__isnull=False),
                 name="customer_sent_requires_assignee",
             )
@@ -97,6 +108,18 @@ class Customer(models.Model):
                 )
 
     def save(self, *args, **kwargs):
+        if self._state.adding and self.customer_number is None:
+            with transaction.atomic():
+                sequence = CustomerNumberSequence.objects.select_for_update().get(pk=1)
+                if sequence.next_number > 9999:
+                    raise ValidationError("ظرفیت شماره مشتری‌ها تکمیل شده است.")
+                self.customer_number = sequence.next_number
+                sequence.next_number += 1
+                sequence.save(update_fields=("next_number",))
+                return self._save_customer(*args, **kwargs)
+        return self._save_customer(*args, **kwargs)
+
+    def _save_customer(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
         if (
             self._state.adding
