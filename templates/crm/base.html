@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#151d31">
   <link rel="icon" href="{% static 'crm/favicon.svg' %}" type="image/svg+xml">
+  <script src="{% static 'crm/theme.js' %}"></script>
   <title>{{ page.title }} | Binux CRM</title>
   <link rel="stylesheet" href="{% static 'crm/app.css' %}">
   <script src="{% static 'crm/app.js' %}" defer></script>
@@ -55,7 +56,7 @@
   </aside>
   <button class="sidebar-backdrop" type="button" aria-label="بستن منو" tabindex="-1" hidden></button>
   <div class="workspace">
-    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><div class="topbar-placeholders"><span class="topbar-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></span><span class="topbar-account"><span class="topbar-avatar" aria-hidden="true">ب</span><span>{% if request.user.is_authenticated %}{{ request.user.get_username }}{% else %}ورود به بخش مشتریان{% endif %}</span></span>{% if request.user.is_authenticated %}<form method="post" action="{% url 'logout' %}" class="logout-form">{% csrf_token %}<button type="submit">خروج</button></form>{% else %}<a class="login-link" href="{% url 'login' %}">ورود</a>{% endif %}</div><span class="topbar-status"><span aria-hidden="true"></span>{% if request.user.is_authenticated %}بخش داخلی{% else %}نسخهٔ نمایشی{% endif %}</span></header>
+    <header class="topbar"><button class="mobile-menu" type="button" aria-label="بازکردن منو" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#icon-menu"/></svg></button><span class="topbar-title">Binux CRM</span><div class="topbar-placeholders"><span class="topbar-search"><svg class="icon" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></span><span class="topbar-account"><span class="topbar-avatar" aria-hidden="true">ب</span><span>{% if request.user.is_authenticated %}{{ request.user.get_username }}{% else %}ورود به بخش مشتریان{% endif %}</span></span>{% if request.user.is_authenticated %}<form method="post" action="{% url 'logout' %}" class="logout-form">{% csrf_token %}<button type="submit">خروج</button></form>{% else %}<a class="login-link" href="{% url 'login' %}">ورود</a>{% endif %}<button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="تغییر به تم شب" title="تغییر به تم شب"><span data-theme-label>تم شب</span></button></div><span class="topbar-status"><span aria-hidden="true"></span>{% if request.user.is_authenticated %}بخش داخلی{% else %}نسخهٔ نمایشی{% endif %}</span></header>
     <main class="main-content" id="main">
       <div class="breadcrumbs"><span>فضای کاری</span><span aria-hidden="true">/</span><span>{{ section.title }}</span></div>
       {% block content %}{% endblock %}

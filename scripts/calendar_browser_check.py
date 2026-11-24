@@ -48,29 +48,19 @@ async def main():
         await page.wait_for_url("**month=1403-02")
         assert await page.get_by_role("heading", name="اردیبهشت ۱۴۰۳").count() == 1
 
-        for width in (1440, 390, 320):
-            await page.set_viewport_size({"width": width, "height": 1000})
-            dimensions = await page.evaluate(
-                "({viewport: document.documentElement.clientWidth, "
-                "document: document.documentElement.scrollWidth})"
-            )
-            assert dimensions["document"] <= dimensions["viewport"], (
-                f"Horizontal overflow at {width}px: {dimensions}"
-            )
+        theme_toggle = page.locator("[data-theme-toggle]")
+        assert await page.locator("html").get_attribute("data-theme") == "light"
+        assert await theme_toggle.get_attribute("aria-pressed") == "false"
+        assert await theme_toggle.get_attribute("aria-label") == "تغییر به تم شب"
+        assert await theme_toggle.inner_text() == "تم شب"
+        assert await page.evaluate("localStorage.getItem('binux-crm-theme')") is None
 
-        light_surfaces = await page.evaluate(
-            """() => ({
-              workspace: getComputedStyle(document.querySelector('.workspace')).backgroundColor,
-              topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
-              calendar: getComputedStyle(document.querySelector('.calendar-panel')).backgroundColor,
-            })"""
-        )
-        assert light_surfaces == {
-            "workspace": "rgb(244, 246, 250)",
-            "topbar": "rgb(255, 255, 255)",
-            "calendar": "rgb(255, 255, 255)",
-        }, f"Light/day theme changed: {light_surfaces}"
-        await page.locator("html").evaluate("element => element.dataset.theme = 'dark'")
+        await theme_toggle.focus()
+        await page.keyboard.press("Enter")
+        assert await page.locator("html").get_attribute("data-theme") == "dark"
+        assert await theme_toggle.get_attribute("aria-pressed") == "true"
+        assert await theme_toggle.get_attribute("aria-label") == "تغییر به تم روز"
+        assert await page.evaluate("localStorage.getItem('binux-crm-theme')") == "dark"
         dark_surfaces = await page.evaluate(
             """() => ({
               workspace: getComputedStyle(document.querySelector('.workspace')).backgroundColor,
@@ -88,17 +78,9 @@ async def main():
 
         response = await page.goto(f"{BASE_URL}/customers/new/")
         assert response and response.status == 200
-        light_form = await page.evaluate(
-            """() => ({
-              panel: getComputedStyle(document.querySelector('.customer-form-surface')).backgroundColor,
-              label: getComputedStyle(document.querySelector('.field-row label')).color,
-            })"""
-        )
-        assert light_form == {
-            "panel": "rgb(255, 255, 255)",
-            "label": "rgb(53, 68, 90)",
-        }, f"Light/day customer form changed: {light_form}"
-        await page.locator("html").evaluate("element => element.dataset.theme = 'dark'")
+        theme_toggle = page.locator("[data-theme-toggle]")
+        assert await page.locator("html").get_attribute("data-theme") == "dark"
+        assert await theme_toggle.get_attribute("aria-pressed") == "true"
         dark_form = await page.evaluate(
             """() => ({
               panel: getComputedStyle(document.querySelector('.customer-form-surface')).backgroundColor,
@@ -114,9 +96,36 @@ async def main():
             "inputText": "rgb(255, 255, 255)",
         }, f"Dark theme customer form is incorrect: {dark_form}"
 
+        for width in (1440, 390, 320):
+            await page.set_viewport_size({"width": width, "height": 1000})
+            dimensions = await page.evaluate(
+                "({viewport: document.documentElement.clientWidth, "
+                "document: document.documentElement.scrollWidth})"
+            )
+            assert dimensions["document"] <= dimensions["viewport"], (
+                f"Horizontal overflow at {width}px: {dimensions}"
+            )
+            assert await theme_toggle.is_visible(), f"Theme control hidden at {width}px"
+
+        await theme_toggle.focus()
+        await page.keyboard.press("Enter")
+        assert await page.locator("html").get_attribute("data-theme") == "light"
+        assert await page.evaluate("localStorage.getItem('binux-crm-theme')") == "light"
+        await page.reload()
+        assert await page.locator("html").get_attribute("data-theme") == "light"
+        assert await page.locator("[data-theme-toggle]").get_attribute("aria-pressed") == "false"
+
+        await page.locator("[data-theme-toggle]").focus()
+        await page.keyboard.press("Enter")
+        assert await page.locator("html").get_attribute("data-theme") == "dark"
+        response = await page.goto(f"{BASE_URL}/internal/calendar/?month=1403-01")
+        assert response and response.status == 200
+        assert await page.locator("html").get_attribute("data-theme") == "dark"
+        assert await page.locator("[data-theme-toggle]").get_attribute("aria-pressed") == "true"
+
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
-        print("Browser calendar/theme check passed: login, calendar keyboard navigation, "
-              "1440/390/320px widths, light/dark surface colors, no page errors.")
+        print("Browser calendar/theme check passed: keyboard theme toggle, default, "
+              "localStorage persistence across routes/reload, desktop/mobile widths, no page errors.")
         await browser.close()
 
 
