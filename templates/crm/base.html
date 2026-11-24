@@ -45,6 +45,7 @@
         <div class="submenu" id="submenu-{{ nav_section.slug }}">
           {% for item in nav_section.pages %}
           <a href="{% url 'crm:'|add:item.name %}"{% if item.name == current_page %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>{{ item.title }}</span></a>
+          {% if item.name == 'customer_list' %}<a href="{% url 'crm:customer_create' %}"{% if current_page == 'customer_create' %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>ثبت مشتری</span></a>{% endif %}
           {% endfor %}
         </div>
       </div>

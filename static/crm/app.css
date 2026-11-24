@@ -845,6 +845,11 @@ textarea.form-control { min-height: 90px; resize: vertical; }
 .customer-details div { min-width: 0; }
 .customer-details dt { color: #6a788d; font-size: 11px; }
 .customer-details dd { margin: 5px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+.customer-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 0 0 22px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.customer-filters label { display: grid; gap: 5px; min-width: 150px; color: #536781; font-size: 12px; }
+.customer-filters input, .customer-filters select { min-height: 40px; padding: 7px 10px; border: 1px solid #d5deea; border-radius: 7px; background: #fff; color: #202b41; font: inherit; }
+.customer-filters button, .customer-filters a { min-height: 40px; padding: 8px 14px; border: 1px solid #355c98; border-radius: 7px; background: #355c98; color: #fff; font-size: 12px; }
+.customer-filters a { display: inline-flex; align-items: center; background: #fff; color: #355c98; }
 .customer-table small { display: block; margin-top: 4px; color: #718199; font-size: 11px; }
 .customer-table .restore-origin { color: #275d43; font-weight: 700; }
 .row-actions { flex-wrap: wrap; }
