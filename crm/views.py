@@ -1,5 +1,6 @@
 import re
 from datetime import timedelta
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import jdatetime
@@ -7,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Q
 from django.http import HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.utils import timezone
 from django.views.decorators.http import (
     require_http_methods,
@@ -133,17 +134,77 @@ def customer_list(request):
     ).select_related("assignee")
     name = request.GET.get("name", "").strip()
     business_type = request.GET.get("business_type", "").strip()
+    category = request.GET.get("category", "").strip()
     status = request.GET.get("status", "").strip()
     if name:
         customers = customers.filter(name__icontains=name)
     if business_type:
         customers = customers.filter(business_type__icontains=business_type)
+    if category in Customer.Category.values:
+        customers = customers.filter(category=category)
+    else:
+        category = ""
     if status in Customer.Status.values:
         customers = customers.filter(status=status)
-    filters = {"name": name, "business_type": business_type, "status": status}
+    else:
+        status = ""
+
+    def tab_url(**changes):
+        params = {
+            "name": name,
+            "business_type": business_type,
+            "category": category,
+            "status": status,
+        }
+        params.update(changes)
+        return "?" + urlencode({key: value for key, value in params.items() if value})
+
+    category_tabs = [
+        {"value": "", "label": "همه", "url": tab_url(category="")}
+    ] + [
+        {"value": value, "label": label, "url": tab_url(category=value)}
+        for value, label in Customer.Category.choices
+    ]
+    completed_params = {
+        key: value
+        for key, value in {
+            "name": name,
+            "business_type": business_type,
+            "category": category,
+        }.items()
+        if value
+    }
+    completed_tab_url = reverse("crm:completed_customers")
+    if completed_params:
+        completed_tab_url += "?" + urlencode(completed_params)
+    status_tabs = [
+        {"value": "", "label": "همهٔ وضعیت‌ها", "url": tab_url(status="")}
+    ] + [
+        {
+            "value": value,
+            "label": label,
+            "url": (
+                completed_tab_url
+                if value == Customer.Status.COMPLETED
+                else tab_url(status=value)
+            ),
+        }
+        for value, label in Customer.Status.choices
+    ]
+    filters = {
+        "name": name,
+        "business_type": business_type,
+        "category": category,
+        "status": status,
+    }
     return render(
         request, "crm/customer_list.html",
-        _customer_context("لیست مشتریان", customers) | {"filters": filters},
+        _customer_context("لیست مشتریان", customers)
+        | {
+            "filters": filters,
+            "category_tabs": category_tabs,
+            "status_tabs": status_tabs,
+        },
     )
 
 
@@ -179,11 +240,22 @@ def completed_customers(request):
         status=Customer.Status.COMPLETED,
         archived_at__isnull=True, trashed_at__isnull=True,
     ).select_related("assignee")
+    name = request.GET.get("name", "").strip()
+    business_type = request.GET.get("business_type", "").strip()
+    category = request.GET.get("category", "").strip()
+    if name:
+        customers = customers.filter(name__icontains=name)
+    if business_type:
+        customers = customers.filter(business_type__icontains=business_type)
+    if category in Customer.Category.values:
+        customers = customers.filter(category=category)
+    else:
+        category = ""
     return render(
         request, "crm/customer_list.html",
         _customer_context(
             "مشتریان تکمیل‌شده", customers, page_key="completed_customers"
-        ),
+        ) | {"filters": {"name": name, "business_type": business_type, "category": category}},
     )
 
 

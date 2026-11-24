@@ -144,7 +144,11 @@ class DisplayOnlyPagesTests(TestCase):
                 if name not in {"customer_list", "follow_ups", "calendar"}:
                     self.assertContains(response, 'data-demo="true"')
                 self.assertContains(response, f'href="{url}" aria-current="page"')
-                self.assertEqual(response.content.decode().count('aria-current="page"'), 1)
+                expected_current_pages = 3 if name == "customer_list" else 1
+                self.assertEqual(
+                    response.content.decode().count('aria-current="page"'),
+                    expected_current_pages,
+                )
                 self.assertContains(response, group)
                 if name not in {"customer_list", "follow_ups", "calendar"}:
                     self.assertEqual(response.content.count(b"<form"), 1)
@@ -344,6 +348,69 @@ class CustomerWorkflowTests(TestCase):
         self.assertContains(create_page, "ثبت مشتری")
         self.assertContains(create_page, reverse("crm:customer_list"))
         self.assertNotContains(create_page, "فیلتر مشتریان")
+
+    def test_customer_category_defaults_and_can_be_selected_on_customer_form(self):
+        default_response = self.client.post(reverse("crm:customer_create"), {})
+        self.assertEqual(default_response.status_code, 302)
+        default_customer = Customer.objects.get()
+        selected_response = self.client.post(
+            reverse("crm:customer_create"),
+            self.customer_data(name="ERP customer", category=Customer.Category.ERP),
+        )
+        self.assertEqual(selected_response.status_code, 302)
+        selected_customer = Customer.objects.get(name="ERP customer")
+        self.assertEqual(default_customer.category, Customer.Category.UNCATEGORIZED)
+        self.assertEqual(selected_customer.category, Customer.Category.ERP)
+        response = self.client.get(reverse("crm:customer_create"))
+        self.assertContains(response, "دسته مشتری")
+        self.assertContains(response, "مشتری ERP")
+
+    def test_customer_list_category_and_status_tabs_filter_and_preserve_name(self):
+        match = Customer.objects.create(
+            name="Filtered ERP", category=Customer.Category.ERP,
+            status=Customer.Status.FOLLOW_UP,
+        )
+        Customer.objects.create(
+            name="Filtered CRM", category=Customer.Category.CRM,
+            status=Customer.Status.FOLLOW_UP,
+        )
+        Customer.objects.create(
+            name="Filtered ERP, no contact", category=Customer.Category.ERP,
+            status=Customer.Status.NO_CONTACT,
+        )
+        Customer.objects.create(
+            name="Archived ERP", category=Customer.Category.ERP,
+            status=Customer.Status.FOLLOW_UP, archived_at=timezone.now(),
+        )
+        Customer.objects.create(
+            name="Trashed ERP", category=Customer.Category.ERP,
+            status=Customer.Status.FOLLOW_UP, trashed_at=timezone.now(),
+        )
+        Customer.objects.create(
+            name="Filtered ERP, completed", category=Customer.Category.ERP,
+            status=Customer.Status.COMPLETED,
+        )
+        response = self.client.get(reverse("crm:customer_list"), {
+            "name": "Filtered", "category": Customer.Category.ERP,
+            "status": Customer.Status.FOLLOW_UP,
+        })
+        self.assertEqual(list(response.context["customers"]), [match])
+        self.assertContains(response, 'aria-label="دسته‌بندی مشتریان"')
+        self.assertContains(response, 'aria-label="وضعیت مشتریان"')
+        self.assertContains(response, "name=Filtered&amp;category=erp&amp;status=follow_up")
+        self.assertEqual(
+            [tab["label"] for tab in response.context["status_tabs"]],
+            ["همهٔ وضعیت‌ها", "بدون تماس", "رد شده", "پیگیری", "ارسالی", "تماس مجدد", "انجام شده"],
+        )
+        completed_tab_url = response.context["status_tabs"][-1]["url"]
+        self.assertEqual(
+            completed_tab_url,
+            reverse("crm:completed_customers")
+            + "?name=Filtered&category=erp",
+        )
+        completed_response = self.client.get(completed_tab_url)
+        self.assertContains(completed_response, "Filtered ERP, completed")
+        self.assertNotContains(completed_response, "Filtered ERP</a>")
 
     def test_status_and_source_choices_match_the_persian_product_labels(self):
         form = CustomerForm()

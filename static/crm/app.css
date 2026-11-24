@@ -887,7 +887,11 @@ textarea.form-control { min-height: 90px; resize: vertical; }
 .calendar-holiday-name { display: block; margin-top: 3px; color: #795513; font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
 .calendar-legend { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px 20px; border-top: 1px solid #edf1f5; color: #667990; font-size: 11px; }
 .calendar-legend-swatch { width: 12px; height: 12px; border-radius: 3px; background: #fff4f2; border: 1px solid #efc8c2; }
-.calendar-holiday-swatch { width: 12px; height: 12px; border-radius: 3px; background: #fff8e6; border: 1px solid #d8a233; }
+.customer-filter-tabs { display: flex; align-items: center; gap: 6px; overflow-x: auto; margin: 0 0 10px; padding: 7px 8px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; scrollbar-width: thin; }
+.customer-filter-tabs a { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 13px; border-radius: 7px; color: #52647c; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.customer-filter-tabs a:hover { background: #f1f5fa; color: #294d80; }
+.customer-filter-tabs a[aria-current="page"] { background: #294d80; color: #fff; }
+.customer-status-tabs { margin-bottom: 18px; }
 @media (max-width: 600px) {
   .calendar-toolbar { gap: 7px; padding: 13px 12px; }
   .calendar-month-title { font-size: 16px; }
