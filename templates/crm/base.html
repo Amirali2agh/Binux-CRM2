@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#151d31">
   <link rel="icon" href="{% static 'crm/favicon.svg' %}" type="image/svg+xml">
+  <script src="{% static 'crm/theme.js' %}"></script>
   <title>{{ page.title }} | Binux CRM</title>
   <link rel="stylesheet" href="{% static 'crm/app.css' %}">
   <script src="{% static 'crm/app.js' %}" defer></script>
@@ -51,7 +52,7 @@
       </div>
       {% endfor %}
     </nav>
-    <div class="sidebar-foot"><span class="foot-indicator" aria-hidden="true"></span><span class="foot-copy">محیط آموزشی · داده‌ها ساختگی‌اند</span></div>
+    <div class="sidebar-foot"><button class="theme-toggle" type="button" role="switch" data-theme-toggle aria-checked="false" aria-label="تم شب" title="تم شب"><span class="theme-toggle-copy"><span>تم شب</span><small data-theme-state>خاموش</small></span><span class="theme-switch-track" aria-hidden="true"><span class="theme-switch-thumb"></span></span></button></div>
   </aside>
   <button class="sidebar-backdrop" type="button" aria-label="بستن منو" tabindex="-1" hidden></button>
   <div class="workspace">
