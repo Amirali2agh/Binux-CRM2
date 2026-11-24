@@ -325,6 +325,7 @@ html:not(.js-ready) .group-title-nojs { display: flex; align-items: center; min-
 }
 .workspace {
   min-width: 0;
+  background: #f4f6fa;
 }
 .topbar {
   height: 80px;
