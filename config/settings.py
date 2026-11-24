@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-local-demo-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
+NOGHTE_API_KEY_FILE = os.environ.get("NOGHTE_API_KEY_FILE", "")
 ROOT_URLCONF = "config.urls"
 INSTALLED_APPS = [
     "django.contrib.admin",

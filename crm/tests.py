@@ -1,5 +1,5 @@
 from datetime import timedelta
-from io import StringIO
+from io import BytesIO, StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -32,6 +32,10 @@ PAGES = (
     ("active_servers", "لیست سرور های فعال", "مدیریت سرور و ایجنت"),
     ("expirations", "انقضا", "مدیریت سرور و ایجنت"),
 )
+
+
+class FakeHTTPResponse(BytesIO):
+    status = 200
 
 
 class LoginGateTests(TestCase):
@@ -794,3 +798,487 @@ class CustomerCallHistoryTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 405)
+
+
+class NoghteStatusMappingTests(TestCase):
+    def test_provider_statuses_map_to_only_the_approved_call_and_customer_states(self):
+        from .integrations.noghte import map_call_status
+        from .models import CallRecord
+
+        self.assertEqual(
+            map_call_status("answered"),
+            (CallRecord.Outcome.ANSWERED, Customer.Status.REJECTED),
+        )
+        for provider_status in ("busy", "failed", "missed", "no_answer"):
+            with self.subTest(provider_status=provider_status):
+                self.assertEqual(
+                    map_call_status(provider_status),
+                    (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
+                )
+        self.assertIsNone(map_call_status("unrecognized"))
+
+
+class NoghteAPIClientTests(TestCase):
+    def test_client_reads_bearer_key_uses_get_filters_and_follows_pages(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from urllib.parse import parse_qs, urlsplit
+
+        from .integrations.noghte import NoghteAPIClient
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            key_file = Path(temp_dir) / "api-key"
+            key_file.write_text("synthetic-test-key", encoding="utf-8")
+            key_file.chmod(0o600)
+            page_payloads = (
+                {"current_page": 1, "last_page": 2, "data": [{"id": "first"}]},
+                {"current_page": 2, "last_page": 2, "data": [{"id": "second"}]},
+            )
+            responses = []
+            for payload in page_payloads:
+                response = FakeHTTPResponse(json.dumps(payload).encode())
+                responses.append(response)
+
+            with patch(
+                "crm.integrations.noghte.urllib.request.urlopen", side_effect=responses
+            ) as urlopen:
+                client = NoghteAPIClient(api_key_file=key_file, retry_delay=0)
+                calls = list(
+                    client.iter_calls(number="test-customer-number", since="2026-11-22")
+                )
+
+        self.assertEqual([call["id"] for call in calls], ["first", "second"])
+        self.assertEqual(urlopen.call_count, 2)
+        first_request = urlopen.call_args_list[0].args[0]
+        second_request = urlopen.call_args_list[1].args[0]
+        self.assertEqual(first_request.get_method(), "GET")
+        self.assertEqual(first_request.headers["Authorization"], "Bearer synthetic-test-key")
+        self.assertEqual(first_request.headers["Accept"], "application/json")
+        first_query = parse_qs(urlsplit(first_request.full_url).query)
+        second_query = parse_qs(urlsplit(second_request.full_url).query)
+        self.assertEqual(first_query["number"], ["test-customer-number"])
+        self.assertEqual(first_query["since"], ["2026-11-22"])
+        self.assertEqual(first_query["direction"], ["outbound"])
+        self.assertNotIn("page", first_query)
+        self.assertEqual(second_query["page"], ["2"])
+
+    def test_client_rejects_out_of_sequence_page_without_requesting_a_later_page(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient, NoghteAPIError
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            key_file = Path(temp_dir) / "api-key"
+            key_file.write_text("synthetic-pagination-key", encoding="utf-8")
+            key_file.chmod(0o600)
+            client = NoghteAPIClient(api_key_file=key_file, retry_delay=0)
+            responses = [
+                FakeHTTPResponse(
+                    json.dumps(
+                        {"current_page": 2, "last_page": 3, "data": [{"id": "skipped-page"}]}
+                    ).encode()
+                ),
+                FakeHTTPResponse(
+                    json.dumps(
+                        {"current_page": 3, "last_page": 3, "data": [{"id": "later-page"}]}
+                    ).encode()
+                ),
+            ]
+            with patch(
+                "crm.integrations.noghte.urllib.request.urlopen", side_effect=responses
+            ) as urlopen, self.assertRaises(NoghteAPIError):
+                list(client.iter_calls(number="test-number", since="2026-11-22"))
+
+        self.assertEqual(urlopen.call_count, 1)
+
+    def test_client_rejects_group_or_world_readable_key_files(self):
+        import tempfile
+        from pathlib import Path
+
+        from .integrations.noghte import NoghteAPIClient, NoghteAPIError
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            key_file = Path(temp_dir) / "api-key"
+            key_file.write_text("synthetic-insecure-secret", encoding="utf-8")
+            key_file.chmod(0o644)
+
+            with self.assertRaises(NoghteAPIError) as error:
+                NoghteAPIClient(api_key_file=key_file)
+
+        self.assertNotIn("synthetic-insecure-secret", str(error.exception))
+
+    def test_incomplete_http_response_retries_without_exposing_partial_content(self):
+        import tempfile
+        from http.client import IncompleteRead
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            key_file = Path(temp_dir) / "api-key"
+            key_file.write_text("synthetic-retry-secret", encoding="utf-8")
+            key_file.chmod(0o600)
+            client = NoghteAPIClient(api_key_file=key_file, retry_delay=0)
+            partial = IncompleteRead(b'{"summary":"synthetic-partial-response"}')
+            success = FakeHTTPResponse(
+                b'{"current_page": 1, "last_page": 1, "data": []}'
+            )
+            with patch(
+                "crm.integrations.noghte.urllib.request.urlopen",
+                side_effect=[partial, success],
+            ) as urlopen, patch("crm.integrations.noghte.time.sleep"):
+                self.assertEqual(
+                    list(client.iter_calls(number="test-number", since="2026-11-22")), []
+                )
+
+        self.assertEqual(urlopen.call_count, 2)
+
+    def test_transient_http_failure_retries_and_auth_error_is_safe(self):
+        import tempfile
+        from email.message import Message
+        from pathlib import Path
+        from unittest.mock import patch
+        from urllib.error import HTTPError
+
+        from .integrations.noghte import NoghteAPIClient, NoghteAPIError
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            key_file = Path(temp_dir) / "api-key"
+            key_file.write_text("synthetic-secret-value", encoding="utf-8")
+            key_file.chmod(0o600)
+            client = NoghteAPIClient(api_key_file=key_file, retry_delay=0)
+            transient_error = HTTPError(
+                "https://api.phone.noghte.io/api/public/v1/calls", 503, "Unavailable", Message(), None
+            )
+            success = FakeHTTPResponse(
+                b'{"current_page": 1, "last_page": 1, "data": []}'
+            )
+            with patch(
+                "crm.integrations.noghte.urllib.request.urlopen",
+                side_effect=[transient_error, success],
+            ) as urlopen, patch("crm.integrations.noghte.time.sleep"):
+                self.assertEqual(
+                    list(client.iter_calls(number="test-number", since="2026-11-22")), []
+                )
+            self.assertEqual(urlopen.call_count, 2)
+
+            forbidden = HTTPError(
+                "https://api.phone.noghte.io/api/public/v1/calls", 403, "Forbidden", Message(), None
+            )
+            with patch(
+                "crm.integrations.noghte.urllib.request.urlopen", side_effect=forbidden
+            ) as urlopen, self.assertRaises(NoghteAPIError) as error:
+                list(client.iter_calls(number="test-number", since="2026-11-22"))
+            self.assertEqual(urlopen.call_count, 1)
+            self.assertNotIn("synthetic-secret-value", str(error.exception))
+
+
+class NoghteCallIdTests(TestCase):
+    def test_provider_call_ids_are_unique_while_local_call_ids_remain_optional(self):
+        from .models import CallRecord
+
+        customer = Customer.objects.create(name="Provider call identity")
+        CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-provider-number",
+            outcome=CallRecord.Outcome.ANSWERED,
+            external_id="provider-call-test-id",
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CallRecord.objects.create(
+                customer=customer,
+                dialed_number="test-provider-number",
+                outcome=CallRecord.Outcome.ANSWERED,
+                external_id="provider-call-test-id",
+            )
+        CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-local-call-one",
+            outcome=CallRecord.Outcome.CALL_AGAIN,
+        )
+        CallRecord.objects.create(
+            customer=customer,
+            dialed_number="test-local-call-two",
+            outcome=CallRecord.Outcome.CALL_AGAIN,
+        )
+        self.assertEqual(CallRecord.objects.count(), 3)
+
+
+class NoghteCallSyncCommandTests(TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.test import override_settings
+
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.key_file = Path(self.temp_dir.name) / "api-key"
+        self.key_file.write_text("synthetic-command-secret", encoding="utf-8")
+        self.key_file.chmod(0o600)
+        self.settings_override = override_settings(NOGHTE_API_KEY_FILE=str(self.key_file))
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+        self.call_time = (timezone.now() - timedelta(minutes=30)).replace(microsecond=0)
+        self.since = self.call_time.date().isoformat()
+
+    def make_customer(self, phone, *, status=Customer.Status.NO_CONTACT, changed_at=None):
+        return Customer.objects.create(
+            name="Synthetic phone customer",
+            phone=phone,
+            status=status,
+            status_changed_at=changed_at or self.call_time - timedelta(days=1),
+        )
+
+    def provider_call(self, call_id, phone, *, status="answered", direction="outbound", when=None):
+        when = when or self.call_time
+        timestamp = when.isoformat().replace("+00:00", "Z")
+        provider_call = {
+            "id": call_id,
+            "direction": direction,
+            "status": status,
+            "to": phone,
+            "started_at": timestamp,
+        }
+        provider_call["answered_at" if status == "answered" else "ended_at"] = timestamp
+        return provider_call
+
+    def run_sync(self, stdout=None):
+        call_command("sync_noghte_calls", "--since", self.since, stdout=stdout or StringIO())
+
+    def test_answered_call_is_imported_and_sets_rejected_at_call_time(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("test-known-number")
+        provider_call = self.provider_call("provider-call-answered", customer.phone)
+        output = StringIO()
+        with patch.object(NoghteAPIClient, "iter_calls", return_value=iter([provider_call])):
+            self.run_sync(output)
+
+        call = CallRecord.objects.get(external_id="provider-call-answered")
+        customer.refresh_from_db()
+        self.assertEqual(call.customer, customer)
+        self.assertEqual(call.dialed_number, customer.phone)
+        self.assertEqual(call.outcome, CallRecord.Outcome.ANSWERED)
+        self.assertEqual(call.called_at, self.call_time)
+        self.assertEqual(customer.status, Customer.Status.REJECTED)
+        self.assertEqual(customer.status_changed_at, self.call_time)
+        self.assertNotIn(customer.phone, output.getvalue())
+        self.assertNotIn("provider-call-answered", output.getvalue())
+
+    def test_nonanswered_provider_statuses_set_call_again(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customers = {
+            status: self.make_customer(f"test-number-{status}")
+            for status in ("busy", "failed", "missed", "no_answer")
+        }
+        events = {
+            customer.phone: [self.provider_call(f"provider-{status}", customer.phone, status=status)]
+            for status, customer in customers.items()
+        }
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=lambda *, number, since: iter(events[number]),
+        ):
+            self.run_sync()
+
+        for customer in customers.values():
+            customer.refresh_from_db()
+            self.assertEqual(customer.status, Customer.Status.CALL_AGAIN)
+        self.assertEqual(
+            set(CallRecord.objects.values_list("outcome", flat=True)),
+            {CallRecord.Outcome.CALL_AGAIN},
+        )
+
+    def test_replay_preserves_manual_outcome_and_customer_status(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("test-replay-number")
+        provider_call = self.provider_call("provider-call-replay", customer.phone)
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=[iter([provider_call]), iter([provider_call])],
+        ):
+            self.run_sync()
+            call = CallRecord.objects.get(external_id="provider-call-replay")
+            call.outcome = CallRecord.Outcome.CALL_AGAIN
+            call.save(update_fields=("outcome",))
+            customer.status = Customer.Status.FOLLOW_UP
+            customer.status_changed_at = self.call_time + timedelta(minutes=1)
+            customer.save(update_fields=("status", "status_changed_at", "updated_at"))
+            self.run_sync()
+
+        call.refresh_from_db()
+        customer.refresh_from_db()
+        self.assertEqual(CallRecord.objects.count(), 1)
+        self.assertEqual(call.outcome, CallRecord.Outcome.CALL_AGAIN)
+        self.assertEqual(customer.status, Customer.Status.FOLLOW_UP)
+        self.assertEqual(customer.status_changed_at, self.call_time + timedelta(minutes=1))
+
+    def test_manual_status_change_after_call_is_not_overwritten_by_later_sync(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        manual_change_at = self.call_time + timedelta(minutes=1)
+        customer = self.make_customer(
+            "test-manual-status-number",
+            status=Customer.Status.FOLLOW_UP,
+            changed_at=manual_change_at,
+        )
+        provider_call = self.provider_call("provider-call-before-manual-change", customer.phone)
+        with patch.object(NoghteAPIClient, "iter_calls", return_value=iter([provider_call])):
+            self.run_sync()
+
+        customer.refresh_from_db()
+        self.assertEqual(customer.status, Customer.Status.FOLLOW_UP)
+        self.assertEqual(customer.status_changed_at, manual_change_at)
+        self.assertEqual(CallRecord.objects.count(), 1)
+
+    def test_status_updated_during_provider_request_is_not_overwritten(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("test-concurrent-status-number")
+        manual_change_at = self.call_time + timedelta(minutes=1)
+        provider_call = self.provider_call("provider-call-concurrent", customer.phone)
+
+        def change_status_while_fetching(*, number, since):
+            customer.status = Customer.Status.FOLLOW_UP
+            customer.status_changed_at = manual_change_at
+            customer.save(update_fields=("status", "status_changed_at", "updated_at"))
+            return iter([provider_call])
+
+        with patch.object(
+            NoghteAPIClient, "iter_calls", side_effect=change_status_while_fetching
+        ):
+            self.run_sync()
+
+        customer.refresh_from_db()
+        self.assertEqual(customer.status, Customer.Status.FOLLOW_UP)
+        self.assertEqual(customer.status_changed_at, manual_change_at)
+        self.assertEqual(CallRecord.objects.count(), 1)
+
+    def test_unmatched_and_unsupported_calls_are_not_associated(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("test-expected-number")
+        events = [
+            self.provider_call("provider-mismatch", "test-other-number"),
+            self.provider_call("provider-unsupported", customer.phone, status="queued"),
+        ]
+        with patch.object(NoghteAPIClient, "iter_calls", return_value=iter(events)):
+            self.run_sync()
+
+        customer.refresh_from_db()
+        self.assertEqual(CallRecord.objects.count(), 0)
+        self.assertEqual(customer.status, Customer.Status.NO_CONTACT)
+
+    def test_duplicate_customer_numbers_are_skipped_without_provider_lookup(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        self.make_customer("test-duplicate-number")
+        self.make_customer("test-duplicate-number")
+        with patch.object(NoghteAPIClient, "iter_calls") as iter_calls:
+            self.run_sync()
+
+        iter_calls.assert_not_called()
+
+    def test_number_shared_with_archived_customer_is_ambiguous_and_not_polled(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        self.make_customer("test-shared-number")
+        archived = self.make_customer("test-shared-number")
+        archived.archived_at = self.call_time
+        archived.save(update_fields=("archived_at", "updated_at"))
+        with patch.object(NoghteAPIClient, "iter_calls") as lookup:
+            self.run_sync()
+
+        lookup.assert_not_called()
+
+    def test_archived_and_trashed_customers_are_not_polled_but_completed_customers_are(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        archived = self.make_customer("test-archived-number")
+        archived.archived_at = self.call_time
+        archived.save(update_fields=("archived_at", "updated_at"))
+        trashed = self.make_customer("test-trashed-number")
+        trashed.trashed_at = self.call_time
+        trashed.save(update_fields=("trashed_at", "updated_at"))
+        completed = self.make_customer(
+            "test-completed-number", status=Customer.Status.COMPLETED
+        )
+
+        with patch.object(NoghteAPIClient, "iter_calls", return_value=iter([])) as lookup:
+            self.run_sync()
+
+        requested_numbers = [call.kwargs["number"] for call in lookup.call_args_list]
+        self.assertEqual(requested_numbers, [completed.phone])
+
+    def test_failed_partial_run_can_be_retried_without_duplicate_records_or_secret_leaks(self):
+        from unittest.mock import patch
+
+        from django.core.management.base import CommandError
+
+        from .integrations.noghte import NoghteAPIClient, NoghteAPIError
+        from .models import CallRecord
+
+        first_customer = self.make_customer("test-failure-number-a")
+        second_customer = self.make_customer("test-failure-number-b")
+        first = self.provider_call("provider-call-before-failure", first_customer.phone)
+        second = self.provider_call(
+            "provider-call-after-failure",
+            second_customer.phone,
+            status="no_answer",
+            when=self.call_time + timedelta(minutes=5),
+        )
+
+        output = StringIO()
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=[iter([first]), NoghteAPIError("synthetic-command-secret"), iter([first]), iter([second])],
+        ):
+            with self.assertRaises(CommandError) as error:
+                self.run_sync(output)
+            self.assertNotIn("synthetic-command-secret", str(error.exception))
+            self.assertEqual(CallRecord.objects.count(), 1)
+            self.run_sync(output)
+
+        self.assertEqual(CallRecord.objects.count(), 2)
+        self.assertEqual(CallRecord.objects.filter(external_id="provider-call-before-failure").count(), 1)
+        self.assertEqual(first_customer.call_records.count(), 1)
+        self.assertEqual(second_customer.call_records.count(), 1)
+        self.assertNotIn(first_customer.phone, output.getvalue())
+        self.assertNotIn(second_customer.phone, output.getvalue())
+        self.assertNotIn("provider-call-before-failure", output.getvalue())

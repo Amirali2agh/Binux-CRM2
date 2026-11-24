@@ -58,11 +58,18 @@ Deleting a customer moves it to trash rather than deleting it immediately. It re
 
 ## Integrations
 
-External services are planned for the future but none have been selected. Do not add provider-specific code, credentials, network calls, or synchronization assumptions until a dedicated issue names the service and behavior.
+Issue #25 selects a read-only Noghte call-history importer. The operator-run `sync_noghte_calls` command sends outbound-history GET requests only for non-empty phone values that occur on exactly one CRM record across all lifecycle states, and that one record is not archived or in Trash; completed customers remain eligible. Phone matching is exact and no normalization is performed. A number duplicated on an archived or trashed record is still ambiguous and is not sent to the provider.
+
+- `answered` maps to call outcome `answered` and customer status `رد شده` (Rejected).
+- `busy`, `failed`, `missed`, and `no_answer` map to call outcome `call_again` and customer status `تماس مجدد` (Call again).
+- Unsupported statuses, inbound calls, unknown numbers, and ambiguous customer numbers are ignored.
+- Provider call IDs make ingestion idempotent. Replays do not overwrite an edited call outcome; a manual customer-status change newer than the call event is preserved.
+- The bearer token is read at runtime from a restricted file named by `NOGHTE_API_KEY_FILE`. The token, transcript, and provider summary are not logged or persisted. The exact customer phone number is sent in the provider query and copied to the linked `CallRecord.dialed_number`; command output contains aggregate counts, never phone numbers.
+- This is not Click-to-call: it does not place calls. No scheduler is selected or configured; the command is run explicitly by an operator. Other external providers remain undecided.
 
 ## Open product decisions
 
 - Phone format/normalization/uniqueness and address structure (all fields remain optional).
 - Exact transition behavior for statuses other than the documented archive/trash restore flow.
 - Which hosting scheduler will periodically run `process_customer_lifecycle` and how its failures will be monitored; no deployment target has been selected.
-- Which external services will be integrated and which one owns each shared field.
+- Which additional external services will be integrated and which one owns each shared field.
