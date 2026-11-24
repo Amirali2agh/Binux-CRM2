@@ -2,8 +2,9 @@
 {% block content %}
 <section class="page-heading" aria-labelledby="page-title">
   <div><h1 id="page-title">{{ page.title }}</h1><p class="page-lead">{{ page.description }}</p></div>
-  {% if current_page == 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_create' %}">ثبت مشتری</a>{% endif %}
+  {% if current_page == 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_create' %}">ثبت مشتری</a>{% else %}<a class="primary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>{% endif %}
 </section>
+{% if current_page == 'customer_list' %}<form method="get" class="customer-filters" aria-label="فیلتر مشتریان"><label>نام مشتری<input name="name" value="{{ filters.name }}"></label><label>نوع کسب‌وکار<input name="business_type" value="{{ filters.business_type }}"></label><label>وضعیت<select name="status"><option value="">همهٔ وضعیت‌ها</option>{% for value,label in status_choices %}<option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><button type="submit">اعمال فیلتر</button><a href="{% url 'crm:customer_list' %}">پاک‌کردن</a></form>{% endif %}
 <section class="display-surface" aria-label="{{ page.title }}">
   <div class="surface-heading"><h2>{{ page.title }}</h2><span>{{ customers|length }} مورد</span></div>
   <div class="table-wrap customer-table-wrap">

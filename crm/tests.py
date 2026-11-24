@@ -316,6 +316,31 @@ class CustomerWorkflowTests(TestCase):
         data.update(overrides)
         return data
 
+    def test_customer_list_filters_by_name_business_type_and_status(self):
+        matching = Customer.objects.create(
+            name="Northwind", business_type="Retail", status=Customer.Status.FOLLOW_UP
+        )
+        Customer.objects.create(name="Northwind Tools", business_type="Retail", status=Customer.Status.NO_CONTACT)
+        Customer.objects.create(name="Southwind", business_type="Retail", status=Customer.Status.FOLLOW_UP)
+        Customer.objects.create(name="Northwind", business_type="Services", status=Customer.Status.FOLLOW_UP)
+        Customer.objects.create(name="Northwind", business_type="Retail", status=Customer.Status.FOLLOW_UP, archived_at=timezone.now())
+        Customer.objects.create(name="Northwind", business_type="Retail", status=Customer.Status.FOLLOW_UP, trashed_at=timezone.now())
+
+        response = self.client.get(reverse("crm:customer_list"), {
+            "name": "Northwind", "business_type": "Retail", "status": Customer.Status.FOLLOW_UP,
+        })
+        self.assertEqual(list(response.context["customers"]), [matching])
+
+    def test_customer_list_filters_combine_and_create_page_is_separate(self):
+        Customer.objects.create(name="Combined", business_type="Retail", status=Customer.Status.FOLLOW_UP)
+        response = self.client.get(reverse("crm:customer_list"), {"name": "Combined", "status": Customer.Status.NO_CONTACT})
+        self.assertFalse(response.context["customers"])
+        self.assertContains(response, reverse("crm:customer_create"))
+        create_page = self.client.get(reverse("crm:customer_create"))
+        self.assertContains(create_page, "ثبت مشتری")
+        self.assertContains(create_page, reverse("crm:customer_list"))
+        self.assertNotContains(create_page, "فیلتر مشتریان")
+
     def test_status_and_source_choices_match_the_persian_product_labels(self):
         form = CustomerForm()
         self.assertEqual(
