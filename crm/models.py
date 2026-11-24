@@ -110,12 +110,12 @@ class Customer(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding and self.customer_number is None:
             with transaction.atomic():
-                sequence = CustomerNumberSequence.objects.select_for_update().get(pk=1)
-                if sequence.next_number > 9999:
+                sequence = CustomerNumberSequence.objects.filter(
+                    pk=1, next_number__lte=9999
+                )
+                if sequence.update(next_number=models.F("next_number") + 1) != 1:
                     raise ValidationError("ظرفیت شماره مشتری‌ها تکمیل شده است.")
-                self.customer_number = sequence.next_number
-                sequence.next_number += 1
-                sequence.save(update_fields=("next_number",))
+                self.customer_number = sequence.get().next_number - 1
                 return self._save_customer(*args, **kwargs)
         return self._save_customer(*args, **kwargs)
 
