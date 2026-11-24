@@ -9,19 +9,9 @@ from pathlib import Path
 
 from django.conf import settings
 
-from crm.models import CallRecord, Customer
-
 API_BASE_URL = "https://api.phone.noghte.io/api/public/v1"
 MAX_API_PAGES = 10000
 RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503, 504}
-
-CALL_STATUS_MAP = {
-    "answered": (CallRecord.Outcome.ANSWERED, Customer.Status.REJECTED),
-    "busy": (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
-    "failed": (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
-    "missed": (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
-    "no_answer": (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
-}
 
 
 class NoghteAPIError(Exception):
@@ -29,10 +19,26 @@ class NoghteAPIError(Exception):
 
 
 def map_call_status(provider_status):
-    return CALL_STATUS_MAP.get(provider_status)
+    """Return ``(call_outcome, customer_status_or_none)`` for a provider status.
+
+    Empty values are unusable (``None``). Any other unrecognized status is the
+    explicit unknown outcome and does not change the customer.
+    """
+    from crm.call_ingestion import customer_status_for_outcome
+    from crm.integrations.noghtefone.outcomes import outcome_from_provider_status
+
+    outcome = outcome_from_provider_status(provider_status)
+    if outcome is None:
+        return None
+    return outcome, customer_status_for_outcome(outcome)
 
 
 class NoghteAPIClient:
+    """Read-only ``GET /calls`` client.
+
+    Pagination keys ``data``, ``current_page``, and ``last_page`` are provisional.
+    The integrations page documents the URL and query parameters, not the JSON shape.
+    """
     def __init__(self, api_key_file=None, *, timeout=20, max_attempts=3, retry_delay=1):
         if api_key_file is None:
             api_key_file = getattr(settings, "NOGHTE_API_KEY_FILE", "")

@@ -70,18 +70,20 @@ Deleting a customer moves it to trash rather than deleting it immediately. It re
 
 ## Integrations
 
-Issue #25 selects a read-only Noghte call-history importer. The operator-run `sync_noghte_calls` command sends outbound-history GET requests only for non-empty phone values that occur on exactly one CRM record across all lifecycle states, and that one record is not archived or in Trash; completed customers remain eligible. Phone matching is exact and no normalization is performed. A number duplicated on an archived or trashed record is still ambiguous and is not sent to the provider.
+Issue #25 connects CRM call history to Noghtefone. Signed webhooks are the primary ingestion path. `sync_noghte_calls` is an operator-run, read-only outbound backfill. Neither path places calls. No scheduler is configured. Details and open provider questions are in `docs/noghtefone-integration.md`.
 
-- `answered` maps to call outcome `answered` and customer status `رد شده` (Rejected).
+Iranian numbers `0912…`, `+98912…`, `98912…`, and `912…` are the same subscriber. A call is associated only when that key belongs to exactly one CRM customer and that customer is not archived or in Trash. Unknown numbers are stored on a delivery row and are not attached to a customer. A number shared with any other record, including an archived or trashed one, is ambiguous and is not attached.
+
+- `call.answered`, and provider status `answered`, map to call outcome `answered` and customer status `رد شده` (Rejected).
 - `busy`, `failed`, `missed`, and `no_answer` map to call outcome `call_again` and customer status `تماس مجدد` (Call again).
-- Unsupported statuses, inbound calls, unknown numbers, and ambiguous customer numbers are ignored.
-- Provider call IDs make ingestion idempotent. Replays do not overwrite an edited call outcome; a manual customer-status change newer than the call event is preserved.
-- The bearer token is read at runtime from a restricted file named by `NOGHTE_API_KEY_FILE`. The token, transcript, and provider summary are not logged or persisted. The exact customer phone number is sent in the provider query and copied to the linked `CallRecord.dialed_number`; command output contains aggregate counts, never phone numbers.
-- This is not Click-to-call: it does not place calls. No scheduler is selected or configured; the command is run explicitly by an operator. Other external providers remain undecided.
+- Any other non-empty status, and a call event with no status, is outcome `unknown` (`نامشخص / پشتیبانی‌نشده`). It is recorded and does not change the customer.
+- Webhook idempotency uses `X-Noghte-Delivery` and the event id. The same provider call id updates one call record. An operator save locks the outcome so later provider events do not overwrite it. A customer-status change newer than the call time is preserved.
+- The webhook signing secret is read from `NOGHTE_WEBHOOK_SECRET`, with `NOGHTE_WEBHOOK_SECRET_PREVIOUS` during rotation. The backfill bearer token is read from the restricted file named by `NOGHTE_API_KEY_FILE`. Secrets are not logged or committed. Command output contains aggregate counts, never phone numbers.
+- Inbound webhook calls can match the caller. The backfill requests outbound history only. Other external providers remain undecided.
 
 ## Open product decisions
 
-- Phone format/normalization/uniqueness and address structure (all fields remain optional).
+- Phone uniqueness and address structure (all fields remain optional). Noghtefone matching normalizes Iranian number forms; other uniqueness rules are still open. The exact provider payload fields are listed in `docs/noghtefone-integration.md`.
 - Exact transition behavior for statuses other than the documented archive/trash restore flow.
 - Which hosting scheduler will periodically run `process_customer_lifecycle` and how its failures will be monitored; no deployment target has been selected.
 - Which additional external services will be integrated and which one owns each shared field.

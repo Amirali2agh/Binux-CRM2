@@ -44,7 +44,7 @@ For optional desktop/mobile keyboard and no-JavaScript browser checks, install `
 - **Contracts / template includes:** Both contract pages reuse `crm/partials/contract_preview.html` with different `contract_state` values. Edit the partial once and check both routes.
 - **Servers and agents / test client:** Run `.venv/bin/python manage.py test crm`. Tests cover the display pages plus authenticated customer behavior, validation, and lifecycle boundaries.
 
-The remaining menu groups are roadmap placeholders. Do not treat demo samples as real operational state. Issue #25 defines a manual, read-only Noghte call-history sync; no other external integrations are authorized without a provider- and behavior-specific issue.
+The remaining menu groups are roadmap placeholders. Do not treat demo samples as real operational state. Issue #25 connects customer call history to Noghtefone webhooks, with a manual read-only backfill. See `docs/noghtefone-integration.md`. No other external integrations are authorized without a provider- and behavior-specific issue.
 
 ## Project guidance
 
@@ -52,6 +52,7 @@ The remaining menu groups are roadmap placeholders. Do not treat demo samples as
 - `docs/architecture.md` — current request path and future customer-domain boundaries.
 - `docs/setup.md` — environment, run, test, and migration guidance.
 - `docs/domain-glossary.md` — approved product terms, customer lifecycle, and open decisions.
+- `docs/noghtefone-integration.md` — Noghtefone webhook setup, secrets, matching rules, and open provider questions.
 - `.github/ISSUE_TEMPLATE/feature_request.md` — scoped, testable feature and learning issue template.
 
 ## Assets
