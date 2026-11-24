@@ -42,6 +42,8 @@ class Customer(models.Model):
         default=Category.UNCATEGORIZED,
     )
     phone = models.CharField("شماره تلفن", max_length=64, blank=True)
+    phone_secondary = models.CharField("شماره تلفن دوم", max_length=64, blank=True)
+    phone_tertiary = models.CharField("شماره تلفن سوم", max_length=64, blank=True)
     status = models.CharField(
         "وضعیت", max_length=20, choices=Status.choices, default=Status.NO_CONTACT,
         blank=True,
@@ -159,6 +161,29 @@ class Customer(models.Model):
             )
         )
         return True
+
+    @property
+    def phone_numbers(self):
+        return tuple(
+            (label, number)
+            for label, number in (
+                ("شماره اول", self.phone),
+                ("شماره دوم", self.phone_secondary),
+                ("شماره سوم", self.phone_tertiary),
+            )
+            if number
+        )
+
+    @property
+    def next_phone_field(self):
+        for field_name in ("phone", "phone_secondary", "phone_tertiary"):
+            if not getattr(self, field_name):
+                return f"id_{field_name}"
+        return ""
+
+    @property
+    def can_add_phone(self):
+        return bool(self.next_phone_field)
 
     def __str__(self):
         return self.name or f"مشتری #{self.pk}"

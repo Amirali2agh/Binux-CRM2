@@ -8,14 +8,17 @@ class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
         fields = (
-            "name", "business_type", "business_name", "category", "phone", "status",
-            "source", "address", "notes", "assignee",
+            "name", "business_type", "business_name", "category", "phone",
+            "phone_secondary", "phone_tertiary", "status", "source", "address",
+            "notes", "assignee",
         )
         widgets = {
             "name": forms.TextInput(attrs={"autocomplete": "off"}),
             "business_type": forms.TextInput(),
             "business_name": forms.TextInput(),
             "phone": forms.TextInput(attrs={"inputmode": "tel"}),
+            "phone_secondary": forms.TextInput(attrs={"inputmode": "tel"}),
+            "phone_tertiary": forms.TextInput(attrs={"inputmode": "tel"}),
             "address": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 4}),
         }

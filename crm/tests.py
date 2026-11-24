@@ -4,14 +4,44 @@ from io import BytesIO, StringIO
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from .forms import CustomerForm
 from .jalali_calendar import build_month
 from .models import Customer
+
+
+class CustomerPhoneMigrationTests(TransactionTestCase):
+    migrate_from = ("crm", "0006_customer_category")
+    migrate_to = ("crm", "0007_customer_phone_secondary_customer_phone_tertiary")
+
+    def migrate_to_target(self, target):
+        executor = MigrationExecutor(connection)
+        executor.migrate([target])
+        return executor.loader.project_state([target]).apps
+
+    def test_existing_primary_phone_survives_adding_optional_phone_columns(self):
+        old_apps = self.migrate_to_target(self.migrate_from)
+        old_customer = old_apps.get_model("crm", "Customer")
+        old_customer.objects.create(name="Existing phone", phone="5550901")
+
+        new_apps = self.migrate_to_target(self.migrate_to)
+        migrated_customer = new_apps.get_model("crm", "Customer").objects.get(
+            name="Existing phone"
+        )
+        self.assertEqual(migrated_customer.phone, "5550901")
+        self.assertEqual(migrated_customer.phone_secondary, "")
+        self.assertEqual(migrated_customer.phone_tertiary, "")
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
 
 PAGES = (
     ("office_inventory", "موجودی دفتر", "داخلی"),
@@ -315,6 +345,8 @@ class CustomerWorkflowTests(TestCase):
             "business_type": "",
             "business_name": "",
             "phone": "",
+            "phone_secondary": "",
+            "phone_tertiary": "",
             "status": Customer.Status.NO_CONTACT,
             "source": "",
             "address": "",
@@ -411,6 +443,89 @@ class CustomerWorkflowTests(TestCase):
         completed_response = self.client.get(completed_tab_url)
         self.assertContains(completed_response, "Filtered ERP, completed")
         self.assertNotContains(completed_response, "Filtered ERP</a>")
+
+    def test_customer_form_persists_three_optional_phone_numbers(self):
+        response = self.client.post(
+            reverse("crm:customer_create"),
+            self.customer_data(
+                name="Three phone test",
+                phone="5550101",
+                phone_secondary="5550102",
+                phone_tertiary="5550103",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        customer = Customer.objects.get(name="Three phone test")
+        self.assertEqual(customer.phone, "5550101")
+        self.assertEqual(customer.phone_secondary, "5550102")
+        self.assertEqual(customer.phone_tertiary, "5550103")
+
+        edit_response = self.client.get(
+            reverse("crm:customer_update", args=[customer.pk])
+        )
+        self.assertContains(edit_response, "شماره تلفن دوم")
+        self.assertContains(edit_response, "شماره تلفن سوم")
+        self.assertContains(edit_response, 'value="5550102"')
+        self.assertContains(edit_response, 'value="5550103"')
+
+        update_response = self.client.post(
+            reverse("crm:customer_update", args=[customer.pk]),
+            self.customer_data(
+                name="Three phone test",
+                phone="5550104",
+                phone_secondary="5550105",
+                phone_tertiary="",
+            ),
+        )
+        self.assertEqual(update_response.status_code, 302)
+        customer.refresh_from_db()
+        self.assertEqual(customer.phone, "5550104")
+        self.assertEqual(customer.phone_secondary, "5550105")
+        self.assertEqual(customer.phone_tertiary, "")
+
+        detail_response = self.client.get(
+            reverse("crm:customer_detail", args=[customer.pk])
+        )
+        self.assertContains(detail_response, "5550104")
+        self.assertContains(detail_response, "5550105")
+        self.assertNotContains(detail_response, "5550103")
+
+    def test_customer_list_add_phone_action_only_shows_below_three_numbers(self):
+        addable = Customer.objects.create(name="Add a phone", phone="5550201")
+        second_slot = Customer.objects.create(
+            name="Add the third phone", phone="5550202", phone_secondary="5550203"
+        )
+        missing_primary = Customer.objects.create(
+            name="Fill missing primary", phone_secondary="5550252",
+            phone_tertiary="5550253",
+        )
+        full = Customer.objects.create(
+            name="All phones", phone="5550301", phone_secondary="5550302",
+            phone_tertiary="5550303",
+        )
+        response = self.client.get(reverse("crm:customer_list"))
+        self.assertContains(response, "5550201")
+        self.assertContains(response, "5550301")
+        self.assertContains(response, "5550302")
+        self.assertContains(response, "5550303")
+        self.assertContains(response, "افزودن شماره")
+        self.assertContains(
+            response,
+            f'href="{reverse("crm:customer_update", args=[addable.pk])}#id_phone_secondary"',
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("crm:customer_update", args=[second_slot.pk])}#id_phone_tertiary"',
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("crm:customer_update", args=[missing_primary.pk])}#id_phone"',
+        )
+        self.assertFalse(full.can_add_phone)
+        self.assertNotContains(
+            response,
+            f'href="{reverse("crm:customer_update", args=[full.pk])}#id_phone_secondary"',
+        )
 
     def test_status_and_source_choices_match_the_persian_product_labels(self):
         form = CustomerForm()
