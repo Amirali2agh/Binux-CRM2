@@ -171,6 +171,12 @@ class DisplayOnlyPagesTests(TestCase):
         self.assertContains(response, 'dir="rtl"')
         self.assertContains(response, 'aria-expanded="true"')
 
+    def test_customer_navigation_is_first_and_brand_logo_is_accessible(self):
+        response = self.client.get(reverse("crm:customer_list"))
+        html = response.content.decode()
+        self.assertLess(html.index("بازاریابی و مشتریان"), html.index("داخلی"))
+        self.assertContains(response, '<img class="brand-logo" src="/static/crm/binux-logo.png" alt="Binux CRM">', html=True)
+
     def test_demo_is_safe_for_read_only_navigation(self):
         response = self.client.get(reverse("crm:active_servers"))
         self.assertContains(response, "سرور آزمایشی")
