@@ -27,7 +27,7 @@
 <div class="app-shell">
   <aside class="sidebar" id="sidebar" aria-label="ناوبری اصلی">
     <div class="sidebar-header">
-      <a class="brand" href="{% url 'crm:home' %}" aria-label="Binux CRM، صفحهٔ آغاز"><span class="brand-symbol" aria-hidden="true">B</span><span class="sidebar-wordmark"><strong>BINUX</strong><small>CRM / نسخهٔ نمایشی</small></span></a>
+      <a class="brand" href="{% url 'crm:home' %}" aria-label="Binux CRM، صفحهٔ آغاز"><img class="brand-logo" src="{% static 'crm/binux-logo.png' %}" alt="Binux CRM"></a>
       <button class="sidebar-collapse" type="button" aria-label="جمع‌کردن سایدبار" aria-controls="sidebar" aria-expanded="true" title="جمع‌کردن سایدبار"><svg class="icon"><use href="#icon-panel"/></svg></button>
       <button class="sidebar-close" type="button" aria-label="بستن منو"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
     </div>
@@ -45,6 +45,7 @@
         <div class="submenu" id="submenu-{{ nav_section.slug }}">
           {% for item in nav_section.pages %}
           <a href="{% url 'crm:'|add:item.name %}"{% if item.name == current_page %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>{{ item.title }}</span></a>
+          {% if item.name == 'customer_list' %}<a href="{% url 'crm:customer_create' %}"{% if current_page == 'customer_create' %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>ثبت مشتری</span></a>{% endif %}
           {% endfor %}
         </div>
       </div>

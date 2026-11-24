@@ -63,6 +63,7 @@ def _customer_context(title, customers, *, page_key="customer_list"):
         "page": {"title": title, "description": "مدیریت اطلاعات و وضعیت مشتریان"},
         "current_page": page_key,
         "customers": customers,
+        "status_choices": Customer.Status.choices,
     }
 
 
@@ -130,9 +131,19 @@ def customer_list(request):
     customers = _active_customers().exclude(
         status=Customer.Status.COMPLETED
     ).select_related("assignee")
+    name = request.GET.get("name", "").strip()
+    business_type = request.GET.get("business_type", "").strip()
+    status = request.GET.get("status", "").strip()
+    if name:
+        customers = customers.filter(name__icontains=name)
+    if business_type:
+        customers = customers.filter(business_type__icontains=business_type)
+    if status in Customer.Status.values:
+        customers = customers.filter(status=status)
+    filters = {"name": name, "business_type": business_type, "status": status}
     return render(
         request, "crm/customer_list.html",
-        _customer_context("لیست مشتریان", customers),
+        _customer_context("لیست مشتریان", customers) | {"filters": filters},
     )
 
 
@@ -221,7 +232,7 @@ def customer_create(request):
         return redirect("crm:customer_detail", pk=customer.pk)
     return render(
         request, "crm/customer_form.html",
-        _customer_context("ثبت مشتری", ()) | {"form": form},
+        _customer_context("ثبت مشتری", (), page_key="customer_create") | {"form": form},
     )
 
 

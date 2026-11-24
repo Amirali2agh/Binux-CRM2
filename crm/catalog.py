@@ -235,6 +235,8 @@ SECTIONS = (
     },
 )
 
+SECTIONS = (SECTIONS[2], SECTIONS[0], SECTIONS[1], *SECTIONS[3:])
+
 PAGES = {
     page["name"]: (section, page) for section in SECTIONS for page in section["pages"]
 }
