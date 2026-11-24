@@ -8,20 +8,15 @@
   const backdrop = document.querySelector(".sidebar-backdrop");
   const workspace = document.querySelector(".workspace");
   const themeToggle = document.querySelector("[data-theme-toggle]");
-  const themeLabel = themeToggle.querySelector("[data-theme-label]");
+  const themeState = themeToggle.querySelector("[data-theme-state]");
   const themeStorageKey = "binux-crm-theme";
   const mobile = matchMedia("(max-width: 760px)");
 
   function setTheme(theme, persist = false) {
     const isDark = theme === "dark";
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
-    themeToggle.setAttribute("aria-pressed", String(isDark));
-    themeToggle.setAttribute(
-      "aria-label",
-      isDark ? "تغییر به تم روز" : "تغییر به تم شب",
-    );
-    themeToggle.title = isDark ? "تغییر به تم روز" : "تغییر به تم شب";
-    themeLabel.textContent = isDark ? "تم روز" : "تم شب";
+    themeToggle.setAttribute("aria-checked", String(isDark));
+    themeState.textContent = isDark ? "روشن" : "خاموش";
     if (persist) {
       try {
         window.localStorage.setItem(themeStorageKey, isDark ? "dark" : "light");

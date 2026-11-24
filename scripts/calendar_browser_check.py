@@ -30,6 +30,7 @@ async def main():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch()
         page = await browser.new_page(viewport={"width": 1440, "height": 1000})
+        await page.emulate_media(reduced_motion="reduce")
         page_errors = []
         page.on("pageerror", lambda error: page_errors.append(str(error)))
 
@@ -48,18 +49,35 @@ async def main():
         await page.wait_for_url("**month=1403-02")
         assert await page.get_by_role("heading", name="اردیبهشت ۱۴۰۳").count() == 1
 
-        theme_toggle = page.locator("[data-theme-toggle]")
+        theme_toggle = page.locator(".sidebar-foot [data-theme-toggle]")
         assert await page.locator("html").get_attribute("data-theme") == "light"
-        assert await theme_toggle.get_attribute("aria-pressed") == "false"
-        assert await theme_toggle.get_attribute("aria-label") == "تغییر به تم شب"
-        assert await theme_toggle.inner_text() == "تم شب"
+        assert await theme_toggle.get_attribute("aria-checked") == "false"
+        assert await theme_toggle.get_attribute("aria-label") == "تم شب"
+        assert await theme_toggle.locator("[data-theme-state]").inner_text() == "خاموش"
+        assert await page.get_by_text("محیط آموزشی · داده‌ها ساختگی‌اند").count() == 0
+        off_switch = await theme_toggle.locator(".theme-switch-track").evaluate(
+            "el => ({background: getComputedStyle(el).backgroundColor, "
+            "thumb: getComputedStyle(el.querySelector('.theme-switch-thumb')).transform, "
+            "transition: getComputedStyle(el.querySelector('.theme-switch-thumb')).transitionDuration})"
+        )
+        assert off_switch == {
+            "background": "rgb(53, 70, 97)",
+            "thumb": "none",
+            "transition": "0s",
+        }
         assert await page.evaluate("localStorage.getItem('binux-crm-theme')") is None
 
         await theme_toggle.focus()
         await page.keyboard.press("Enter")
         assert await page.locator("html").get_attribute("data-theme") == "dark"
-        assert await theme_toggle.get_attribute("aria-pressed") == "true"
-        assert await theme_toggle.get_attribute("aria-label") == "تغییر به تم روز"
+        assert await theme_toggle.get_attribute("aria-checked") == "true"
+        assert await theme_toggle.locator("[data-theme-state]").inner_text() == "روشن"
+        on_switch = await theme_toggle.locator(".theme-switch-track").evaluate(
+            "el => ({background: getComputedStyle(el).backgroundColor, "
+            "thumb: getComputedStyle(el.querySelector('.theme-switch-thumb')).transform})"
+        )
+        assert on_switch["background"] == "rgb(53, 92, 152)"
+        assert on_switch["thumb"] != "none"
         assert await page.evaluate("localStorage.getItem('binux-crm-theme')") == "dark"
         dark_surfaces = await page.evaluate(
             """() => ({
@@ -78,9 +96,9 @@ async def main():
 
         response = await page.goto(f"{BASE_URL}/customers/new/")
         assert response and response.status == 200
-        theme_toggle = page.locator("[data-theme-toggle]")
+        theme_toggle = page.locator(".sidebar-foot [data-theme-toggle]")
         assert await page.locator("html").get_attribute("data-theme") == "dark"
-        assert await theme_toggle.get_attribute("aria-pressed") == "true"
+        assert await theme_toggle.get_attribute("aria-checked") == "true"
         dark_form = await page.evaluate(
             """() => ({
               panel: getComputedStyle(document.querySelector('.customer-form-surface')).backgroundColor,
@@ -105,27 +123,47 @@ async def main():
             assert dimensions["document"] <= dimensions["viewport"], (
                 f"Horizontal overflow at {width}px: {dimensions}"
             )
-            assert await theme_toggle.is_visible(), f"Theme control hidden at {width}px"
+            if width <= 760:
+                await page.locator(".mobile-menu").click()
+            assert await page.get_by_role("switch", name="تم شب").is_visible(), (
+                f"Theme switch hidden at {width}px"
+            )
+            sidebar_box = await page.locator(".sidebar").bounding_box()
+            switch_box = await theme_toggle.bounding_box()
+            bottom_gap = sidebar_box["y"] + sidebar_box["height"] - (
+                switch_box["y"] + switch_box["height"]
+            )
+            assert 0 <= bottom_gap <= 40, (
+                f"Theme switch is not at the bottom of the sidebar at {width}px: {bottom_gap}px"
+            )
+            if width <= 760:
+                await page.keyboard.press("Escape")
 
+        await page.locator(".mobile-menu").click()
         await theme_toggle.focus()
         await page.keyboard.press("Enter")
         assert await page.locator("html").get_attribute("data-theme") == "light"
+        assert await theme_toggle.get_attribute("aria-checked") == "false"
+        assert await theme_toggle.locator("[data-theme-state]").inner_text() == "خاموش"
         assert await page.evaluate("localStorage.getItem('binux-crm-theme')") == "light"
         await page.reload()
         assert await page.locator("html").get_attribute("data-theme") == "light"
-        assert await page.locator("[data-theme-toggle]").get_attribute("aria-pressed") == "false"
+        assert await page.locator(".sidebar-foot [data-theme-toggle]").get_attribute("aria-checked") == "false"
 
-        await page.locator("[data-theme-toggle]").focus()
+        await page.locator(".mobile-menu").click()
+        theme_toggle = page.locator(".sidebar-foot [data-theme-toggle]")
+        await theme_toggle.focus()
         await page.keyboard.press("Enter")
         assert await page.locator("html").get_attribute("data-theme") == "dark"
         response = await page.goto(f"{BASE_URL}/internal/calendar/?month=1403-01")
         assert response and response.status == 200
         assert await page.locator("html").get_attribute("data-theme") == "dark"
-        assert await page.locator("[data-theme-toggle]").get_attribute("aria-pressed") == "true"
+        assert await page.locator(".sidebar-foot [data-theme-toggle]").get_attribute("aria-checked") == "true"
 
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
-        print("Browser calendar/theme check passed: keyboard theme toggle, default, "
-              "localStorage persistence across routes/reload, desktop/mobile widths, no page errors.")
+        print("Browser calendar/theme check passed: accessible sidebar on/off switch, "
+              "default, localStorage persistence across routes/reload, placement at "
+              "1440/390/320px, no overflow/page errors.")
         await browser.close()
 
 
