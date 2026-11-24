@@ -58,9 +58,65 @@ async def main():
                 f"Horizontal overflow at {width}px: {dimensions}"
             )
 
+        light_surfaces = await page.evaluate(
+            """() => ({
+              workspace: getComputedStyle(document.querySelector('.workspace')).backgroundColor,
+              topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+              calendar: getComputedStyle(document.querySelector('.calendar-panel')).backgroundColor,
+            })"""
+        )
+        assert light_surfaces == {
+            "workspace": "rgb(244, 246, 250)",
+            "topbar": "rgb(255, 255, 255)",
+            "calendar": "rgb(255, 255, 255)",
+        }, f"Light/day theme changed: {light_surfaces}"
+        await page.locator("html").evaluate("element => element.dataset.theme = 'dark'")
+        dark_surfaces = await page.evaluate(
+            """() => ({
+              workspace: getComputedStyle(document.querySelector('.workspace')).backgroundColor,
+              topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+              calendar: getComputedStyle(document.querySelector('.calendar-panel')).backgroundColor,
+              fridayHeader: getComputedStyle(document.querySelector('.jalali-calendar th:last-child')).color,
+            })"""
+        )
+        assert dark_surfaces == {
+            "workspace": "rgb(74, 74, 74)",
+            "topbar": "rgb(74, 74, 74)",
+            "calendar": "rgb(74, 74, 74)",
+            "fridayHeader": "rgb(255, 204, 204)",
+        }, f"Dark theme shell surfaces or Friday contrast color are incorrect: {dark_surfaces}"
+
+        response = await page.goto(f"{BASE_URL}/customers/new/")
+        assert response and response.status == 200
+        light_form = await page.evaluate(
+            """() => ({
+              panel: getComputedStyle(document.querySelector('.customer-form-surface')).backgroundColor,
+              label: getComputedStyle(document.querySelector('.field-row label')).color,
+            })"""
+        )
+        assert light_form == {
+            "panel": "rgb(255, 255, 255)",
+            "label": "rgb(53, 68, 90)",
+        }, f"Light/day customer form changed: {light_form}"
+        await page.locator("html").evaluate("element => element.dataset.theme = 'dark'")
+        dark_form = await page.evaluate(
+            """() => ({
+              panel: getComputedStyle(document.querySelector('.customer-form-surface')).backgroundColor,
+              label: getComputedStyle(document.querySelector('.field-row label')).color,
+              input: getComputedStyle(document.querySelector('.form-control')).backgroundColor,
+              inputText: getComputedStyle(document.querySelector('.form-control')).color,
+            })"""
+        )
+        assert dark_form == {
+            "panel": "rgb(92, 92, 92)",
+            "label": "rgb(255, 255, 255)",
+            "input": "rgb(74, 74, 74)",
+            "inputText": "rgb(255, 255, 255)",
+        }, f"Dark theme customer form is incorrect: {dark_form}"
+
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
-        print("Browser calendar check passed: login, keyboard month navigation, "
-              "accessible dates, 1440/390/320px widths, no page errors.")
+        print("Browser calendar/theme check passed: login, calendar keyboard navigation, "
+              "1440/390/320px widths, light/dark surface colors, no page errors.")
         await browser.close()
 
 
