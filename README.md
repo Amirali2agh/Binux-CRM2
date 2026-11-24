@@ -44,7 +44,7 @@ For optional desktop/mobile keyboard and no-JavaScript browser checks, install `
 - **Contracts / template includes:** Both contract pages reuse `crm/partials/contract_preview.html` with different `contract_state` values. Edit the partial once and check both routes.
 - **Servers and agents / test client:** Run `.venv/bin/python manage.py test crm`. Tests cover the display pages plus authenticated customer behavior, validation, and lifecycle boundaries.
 
-The remaining menu groups are roadmap placeholders. Do not treat demo samples as real operational state or add an external integration until a provider and behavior are explicitly selected.
+The remaining menu groups are roadmap placeholders. Do not treat demo samples as real operational state. Issue #25 defines a manual, read-only Noghte call-history sync; no other external integrations are authorized without a provider- and behavior-specific issue.
 
 ## Project guidance
 

@@ -103,6 +103,20 @@ The `process_customer_lifecycle` management command archives rejected customers 
 
 Migrations are checked in under `crm/migrations/`. Use Django's standard `makemigrations` and `migrate` commands when the model changes. Never apply migrations to a live system as part of a local feature PR.
 
+## Phone call history sync
+
+Issue #25 adds a manual, read-only import from Noghte; it does not place calls or run on a schedule. The command queries outbound call history only for exact phone values that occur on exactly one CRM record across all lifecycle states, with that record neither archived nor in Trash. Completed records remain eligible. A number duplicated on any record (including archived or trashed records), an unknown number, inbound call, or unsupported provider status is skipped. Provider call IDs make retries safe; a later manual customer-status change and manually edited call outcome are not overwritten.
+
+Set `NOGHTE_API_KEY_FILE` in the command's environment to the path of a permission-restricted file containing the bearer token. On POSIX, the file must not be accessible by group or other users (for example, mode `0600`); the client rejects broader permissions. The command reads the file at runtime. Do not pass the token on the command line, commit it, or print it. The command does not fetch or store call transcripts or provider summaries, and its output contains aggregate counts only.
+
+Run an explicit date window with:
+
+```bash
+NOGHTE_API_KEY_FILE=/secure/path/to/api-key .venv/bin/python manage.py sync_noghte_calls --since YYYY-MM-DD
+```
+
+The command uses the provider's read-only `GET /api/public/v1/calls` endpoint. Transient network errors and HTTP 429, 500, 502, 503, and 504 responses are retried up to three attempts; other HTTP errors or invalid responses exit non-zero. Rerun with the same `--since` date after correcting the cause; already imported call IDs are skipped. The documented CI tests mock HTTP and do not use the provider credential or contact Noghte. Never run this command against a live CRM database as part of a feature check; no production server or scheduler is configured here.
+
 ## Troubleshooting
 
 - If the browser cannot load the page, confirm the server is running at `127.0.0.1:8000` and use the exact `CRM_BASE_URL` value required by the smoke script.
