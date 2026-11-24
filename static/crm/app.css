@@ -888,6 +888,151 @@ textarea.form-control { min-height: 90px; resize: vertical; }
 .calendar-day--holiday.calendar-day--friday { background: #fff4f2; }
 .calendar-day--holiday time { color: #795513; }
 .calendar-holiday-name { display: block; margin-top: 3px; color: #795513; font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  color: #fff;
+  background: #4a4a4a;
+}
+html[data-theme="dark"] .workspace,
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .display-surface,
+html[data-theme="dark"] .customer-filters,
+html[data-theme="dark"] .calendar-panel,
+html[data-theme="dark"] .contract-document,
+html[data-theme="dark"] .calendar-empty {
+  background: #4a4a4a;
+  color: #fff;
+  border-color: #626262;
+}
+html[data-theme="dark"] .topbar {
+  border-bottom-color: #626262;
+}
+html[data-theme="dark"] .topbar-title,
+html[data-theme="dark"] .topbar-placeholders,
+html[data-theme="dark"] .topbar-status,
+html[data-theme="dark"] .breadcrumbs,
+html[data-theme="dark"] .breadcrumbs span:last-child,
+html[data-theme="dark"] .page-heading h1,
+html[data-theme="dark"] .page-lead,
+html[data-theme="dark"] .surface-heading h2,
+html[data-theme="dark"] .surface-heading span,
+html[data-theme="dark"] th,
+html[data-theme="dark"] td,
+html[data-theme="dark"] .sample-list strong,
+html[data-theme="dark"] .sample-list small,
+html[data-theme="dark"] .sample-tag,
+html[data-theme="dark"] .contract-preview span,
+html[data-theme="dark"] .contract-preview strong,
+html[data-theme="dark"] .contract-document h3,
+html[data-theme="dark"] .contract-document p,
+html[data-theme="dark"] .contract-archive strong,
+html[data-theme="dark"] .contract-archive small,
+html[data-theme="dark"] .empty-state h3,
+html[data-theme="dark"] .empty-state p,
+html[data-theme="dark"] .next-phase,
+html[data-theme="dark"] .customer-details dt,
+html[data-theme="dark"] .customer-details dd,
+html[data-theme="dark"] .customer-filters label,
+html[data-theme="dark"] .customer-table small,
+html[data-theme="dark"] .calendar-month-title,
+html[data-theme="dark"] .calendar-day time,
+html[data-theme="dark"] .calendar-day-empty,
+html[data-theme="dark"] .calendar-legend {
+  color: #fff;
+}
+html[data-theme="dark"] .display-surface th,
+html[data-theme="dark"] .calendar-panel .jalali-calendar th,
+html[data-theme="dark"] .calendar-day--outside,
+html[data-theme="dark"] tbody tr:hover,
+html[data-theme="dark"] .contract-document {
+  background: #5c5c5c;
+}
+html[data-theme="dark"] .display-surface th,
+html[data-theme="dark"] .display-surface td,
+html[data-theme="dark"] .sample-list li,
+html[data-theme="dark"] .contract-preview div,
+html[data-theme="dark"] .contract-archive li,
+html[data-theme="dark"] .calendar-toolbar,
+html[data-theme="dark"] .jalali-calendar td,
+html[data-theme="dark"] .calendar-legend {
+  border-color: #707070;
+}
+html[data-theme="dark"] .demo-notice {
+  border-color: #626262;
+  background: #4a4a4a;
+  color: #fff;
+}
+html[data-theme="dark"] .phase-pill {
+  border-color: #626262;
+  background: #4a4a4a;
+  color: #fff;
+}
+html[data-theme="dark"] .customer-form-surface {
+  background: #5c5c5c;
+  border-color: #707070;
+}
+html[data-theme="dark"] .customer-form-surface .field-row,
+html[data-theme="dark"] .customer-form-surface .field-row label,
+html[data-theme="dark"] .customer-form-surface .field-row small {
+  color: #fff;
+}
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .customer-filters input,
+html[data-theme="dark"] .customer-filters select,
+html[data-theme="dark"] .logout-form button,
+html[data-theme="dark"] .login-link,
+html[data-theme="dark"] .row-actions button,
+html[data-theme="dark"] .row-actions a,
+html[data-theme="dark"] .form-actions .secondary-action,
+html[data-theme="dark"] .customer-filters a,
+html[data-theme="dark"] .calendar-nav-link {
+  border-color: #777;
+  background: #4a4a4a;
+  color: #fff;
+}
+html[data-theme="dark"] .form-control:focus-visible,
+html[data-theme="dark"] .customer-filters input:focus-visible,
+html[data-theme="dark"] .customer-filters select:focus-visible,
+html[data-theme="dark"] a:focus-visible,
+html[data-theme="dark"] button:focus-visible {
+  outline: 3px solid #a8c7ff;
+  outline-offset: 2px;
+}
+html[data-theme="dark"] .field-invalid .form-control,
+html[data-theme="dark"] .form-control[aria-invalid="true"] {
+  border-color: #ff8585;
+  background: #542d2d;
+  color: #fff;
+}
+html[data-theme="dark"] .field-errors,
+html[data-theme="dark"] .form-errors {
+  color: #ffb3b3;
+}
+html[data-theme="dark"] .customer-filters button,
+html[data-theme="dark"] .primary-action {
+  border-color: #8baee6;
+  background: #355c98;
+  color: #fff;
+}
+html[data-theme="dark"] .calendar-nav-link.is-disabled {
+  border-color: #777;
+  background: #4a4a4a;
+  color: #c4c4c4;
+}
+html[data-theme="dark"] .calendar-day--friday,
+html[data-theme="dark"] .calendar-day--holiday,
+html[data-theme="dark"] .calendar-day--holiday.calendar-day--friday {
+  background: #4a4a4a;
+}
+html[data-theme="dark"] .calendar-day--friday time,
+html[data-theme="dark"] .calendar-day--holiday time,
+html[data-theme="dark"] .calendar-holiday-name {
+  color: #ffd27a;
+}
+html[data-theme="dark"] .customer-table .restore-origin {
+  color: #9ee3b3;
+}
 .calendar-legend { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px 20px; border-top: 1px solid #edf1f5; color: #667990; font-size: 11px; }
 .calendar-legend-swatch { width: 12px; height: 12px; border-radius: 3px; background: #fff4f2; border: 1px solid #efc8c2; }
 .customer-filter-tabs { display: flex; align-items: center; gap: 6px; overflow-x: auto; margin: 0 0 10px; padding: 7px 8px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; scrollbar-width: thin; }
@@ -904,4 +1049,28 @@ textarea.form-control { min-height: 90px; resize: vertical; }
   .calendar-day time { font-size: 12px; }
   .calendar-day-empty { font-size: 9px; }
   .calendar-empty { margin: 12px; padding: 9px; }
+}
+html[data-theme="dark"] .topbar-status,
+html[data-theme="dark"] .topbar-avatar {
+  background: #355c98;
+  color: #fff;
+}
+html[data-theme="dark"] .topbar-search,
+html[data-theme="dark"] .topbar-account {
+  border-color: #707070;
+}
+html[data-theme="dark"] .customer-filter-tabs {
+  border-color: #626262;
+  background: #4a4a4a;
+}
+html[data-theme="dark"] .customer-filter-tabs a {
+  color: #fff;
+}
+html[data-theme="dark"] .customer-filter-tabs a:hover {
+  background: #5c5c5c;
+  color: #fff;
+}
+html[data-theme="dark"] .customer-filter-tabs a[aria-current="page"] {
+  background: #355c98;
+  color: #fff;
 }
