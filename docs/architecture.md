@@ -19,7 +19,7 @@ This map distinguishes live customer records from the remaining fictional `catal
 
 The menu is an information architecture map. The first real workflow is customer management, including its customer list, follow-up view, assigned work, completed customers, archive, and trash lifecycle. Other menu areas remain unimplemented roadmap items until an issue defines their business rules.
 
-Future integrations are intentionally undecided. Before adding one, document the user workflow, system of record, fields exchanged, authentication/secret handling, retries, duplicate handling, and failure behavior in a scoped issue. Implement provider-specific details behind a narrow adapter; keep the customer domain independent of any one external service.
+Issue #25 selects one narrow integration: read-only Noghte call-history import. Provider-specific HTTP and bearer authentication live in `crm/integrations/noghte.py`; `crm/management/commands/sync_noghte_calls.py` is the operator-run entry point. It requests only outbound calls for an exact phone value that occurs on one CRM record across all lifecycle states, with that record neither archived nor in Trash (completed customers remain eligible); it does not place calls, fetch transcripts, or store provider summaries. Credentials are read at runtime from the file configured by `NOGHTE_API_KEY_FILE`. No scheduler is configured. Before adding any further provider, document the user workflow, system of record, fields exchanged, authentication/secret handling, retries, duplicate handling, and failure behavior in a scoped issue. Keep provider details behind a narrow adapter and the customer domain independent of external services.
 
 ## Intended customer-domain boundaries
 

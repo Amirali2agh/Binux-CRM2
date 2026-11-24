@@ -165,6 +165,13 @@ class CallRecord(models.Model):
     dialed_number = models.CharField("شمارهٔ گرفته‌شده", max_length=64)
     outcome = models.CharField("نتیجهٔ تماس", max_length=20, choices=Outcome.choices)
     called_at = models.DateTimeField("زمان تماس", default=timezone.now)
+    external_id = models.CharField(
+        "شناسهٔ تماس خارجی",
+        max_length=128,
+        unique=True,
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ("-called_at", "-pk")
