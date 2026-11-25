@@ -1,12 +1,11 @@
 from django.urls import path
-from django.views.generic import RedirectView
 
 from . import views
 from .catalog import SECTIONS
 
 app_name = "crm"
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="crm:office_inventory", permanent=False), name="home"),
+    path("", views.home, name="home"),
     path("internal/calendar/", views.calendar_view, name="calendar"),
     path("customers/", views.customer_list, name="customer_list"),
     path("customers/follow-ups/", views.customer_follow_ups, name="follow_ups"),

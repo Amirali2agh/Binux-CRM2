@@ -239,6 +239,11 @@ class CrmRoleAccessTests(TestCase):
         self.assertContains(followups, "Assigned record")
         self.assertNotContains(followups, "Other marketer record")
 
+    def test_marketer_root_redirects_to_customer_workflow(self):
+        self.client.force_login(self.marketer)
+        response = self.client.get(reverse("crm:home"))
+        self.assertRedirects(response, reverse("crm:customer_list"))
+
     def test_marketer_can_read_assigned_detail_without_mutation_controls(self):
         self.client.force_login(self.marketer)
         response = self.client.get(

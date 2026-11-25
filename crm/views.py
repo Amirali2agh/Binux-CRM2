@@ -23,6 +23,7 @@ from .jalali_calendar import build_month
 from .models import CallRecord, Customer
 from .roles import (
     customer_queryset_for_user,
+    is_marketer,
     manager_required,
     role_required,
 )
@@ -72,6 +73,14 @@ def _customer_context(title, customers, *, page_key="customer_list"):
         "customers": customers,
         "status_choices": Customer.Status.choices,
     }
+
+
+@require_safe
+def home(request):
+    destination = (
+        "crm:customer_list" if is_marketer(request.user) else "crm:office_inventory"
+    )
+    return redirect(destination)
 
 
 @login_required
