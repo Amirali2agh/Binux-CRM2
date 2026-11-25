@@ -412,6 +412,7 @@ class CustomerWorkflowTests(TestCase):
             "name": "",
             "business_type": "",
             "business_name": "",
+            "category": Customer.Category.CRM,
             "phone": "",
             "phone_secondary": "",
             "phone_tertiary": "",
@@ -649,8 +650,11 @@ class CustomerWorkflowTests(TestCase):
             ["تماس تلفنی", "دیوار", "حضوری", "سایر"],
         )
 
-    def test_all_customer_fields_are_optional_and_record_persists(self):
-        response = self.client.post(reverse("crm:customer_create"), {})
+    def test_non_category_customer_fields_are_optional_and_record_persists(self):
+        response = self.client.post(
+            reverse("crm:customer_create"),
+            self.customer_data(category=Customer.Category.ERP),
+        )
         self.assertEqual(response.status_code, 302)
         customer = Customer.objects.get()
         self.assertEqual(customer.name, "")

@@ -42,6 +42,19 @@ def categorize_existing_numbers(apps, schema_editor):
         )
 
 
+def restore_single_sequence(apps, schema_editor):
+    Sequence = apps.get_model("crm", "CustomerNumberSequence")
+    database = schema_editor.connection.alias
+    next_number = max(
+        Sequence.objects.using(database).values_list("next_number", flat=True),
+        default=1,
+    )
+    Sequence.objects.using(database).all().delete()
+    Sequence.objects.using(database).create(
+        category="uncategorized", next_number=next_number
+    )
+
+
 class Migration(migrations.Migration):
     dependencies = [("crm", "0008_customernumbersequence_customer_customer_number_and_more")]
 
@@ -75,5 +88,5 @@ class Migration(migrations.Migration):
             name="next_number",
             field=models.PositiveSmallIntegerField(default=1),
         ),
-        migrations.RunPython(categorize_existing_numbers, migrations.RunPython.noop),
+        migrations.RunPython(categorize_existing_numbers, restore_single_sequence),
     ]
