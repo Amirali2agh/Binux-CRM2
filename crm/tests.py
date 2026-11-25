@@ -2,6 +2,7 @@ from datetime import timedelta
 from io import BytesIO, StringIO
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
@@ -187,6 +188,99 @@ class LoginGateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'role="alert"')
         self.assertContains(response, "نام کاربری یا گذرواژه درست نیست.")
+
+
+class CrmRoleAccessTests(TestCase):
+    def create_user_with_role(self, username, role, **kwargs):
+        user = get_user_model().objects.create_user(
+            username=username, password="safe-test-password", **kwargs
+        )
+        group, _ = Group.objects.get_or_create(name=role)
+        user.groups.add(group)
+        return user
+
+    def setUp(self):
+        self.manager = self.create_user_with_role("role-manager", "CRM Manager")
+        self.marketer = self.create_user_with_role("role-marketer", "CRM Marketer")
+        self.other_marketer = self.create_user_with_role(
+            "other-marketer", "CRM Marketer"
+        )
+        self.manager_customer = Customer.objects.create(name="Manager-only record")
+        self.assigned_customer = Customer.objects.create(
+            name="Assigned record", assignee=self.marketer,
+            status=Customer.Status.FOLLOW_UP,
+        )
+        self.other_customer = Customer.objects.create(
+            name="Other marketer record", assignee=self.other_marketer,
+            status=Customer.Status.FOLLOW_UP,
+        )
+        self.unassigned_customer = Customer.objects.create(name="Unassigned record")
+
+    def test_marketer_sees_only_assigned_customers_and_their_followups(self):
+        self.client.force_login(self.marketer)
+        customers = self.client.get(reverse("crm:customer_list"))
+        followups = self.client.get(reverse("crm:follow_ups"))
+
+        self.assertEqual(customers.status_code, 200)
+        self.assertContains(customers, "Assigned record")
+        self.assertNotContains(customers, "Other marketer record")
+        self.assertNotContains(customers, "Unassigned record")
+        self.assertNotContains(customers, "Manager-only record")
+        self.assertContains(followups, "Assigned record")
+        self.assertNotContains(followups, "Other marketer record")
+
+    def test_marketer_cannot_open_unassigned_or_another_marketers_customer(self):
+        self.client.force_login(self.marketer)
+        for customer in (self.other_customer, self.unassigned_customer):
+            with self.subTest(customer=customer.name):
+                response = self.client.get(
+                    reverse("crm:customer_detail", args=[customer.pk])
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_marketer_cannot_use_write_actions_or_other_crm_areas(self):
+        self.client.force_login(self.marketer)
+        denied = (
+            self.client.post(reverse("crm:customer_create"), {"name": "Injected"}),
+            self.client.post(
+                reverse("crm:customer_update", args=[self.assigned_customer.pk]),
+                {"name": "Changed"},
+            ),
+            self.client.post(
+                reverse("crm:customer_delete", args=[self.assigned_customer.pk])
+            ),
+            self.client.get(reverse("crm:calendar")),
+            self.client.get(reverse("crm:office_inventory")),
+        )
+        self.assertTrue(all(response.status_code == 403 for response in denied))
+        self.assigned_customer.refresh_from_db()
+        self.assertEqual(self.assigned_customer.name, "Assigned record")
+        self.assertFalse(Customer.objects.filter(name="Injected").exists())
+
+    def test_marketer_cannot_enter_django_admin_even_if_staff(self):
+        self.marketer.is_staff = True
+        self.marketer.save(update_fields={"is_staff"})
+        self.client.force_login(self.marketer)
+        self.assertEqual(self.client.get(reverse("admin:index")).status_code, 403)
+
+    def test_unassigned_user_has_no_crm_access(self):
+        user = get_user_model().objects.create_user(
+            username="role-unassigned", password="safe-test-password"
+        )
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("crm:customer_list")).status_code, 403)
+
+    def test_manager_retains_full_customer_access_and_can_create(self):
+        self.client.force_login(self.manager)
+        response = self.client.get(reverse("crm:customer_list"))
+        self.assertContains(response, "Manager-only record")
+        self.assertContains(response, "Assigned record")
+        created = self.client.post(
+            reverse("crm:customer_create"),
+            {"name": "Manager-created record", "status": Customer.Status.NO_CONTACT},
+        )
+        self.assertEqual(created.status_code, 302)
+        self.assertTrue(Customer.objects.filter(name="Manager-created record").exists())
 
 
 class DisplayOnlyPagesTests(TestCase):
