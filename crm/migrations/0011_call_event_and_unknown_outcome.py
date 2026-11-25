@@ -7,8 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('crm', '0009_category_customer_numbers'),
-        ('crm', '0009_crm_role_groups'),
+        ('crm', '0010_elevate_existing_users_to_manager'),
     ]
 
     operations = [

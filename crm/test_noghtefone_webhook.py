@@ -17,6 +17,17 @@ WEBHOOK_SECRET = "synthetic-webhook-secret"
 PREVIOUS_SECRET = "synthetic-previous-webhook-secret"
 
 
+def create_manager(username):
+    from django.contrib.auth.models import Group
+
+    user = get_user_model().objects.create_user(
+        username=username, password="safe-test-password"
+    )
+    group, _ = Group.objects.get_or_create(name="CRM Manager")
+    user.groups.add(group)
+    return user
+
+
 def sign(body, secret, timestamp):
     digest = hmac.new(
         secret.encode("utf-8"),
@@ -103,10 +114,7 @@ class NoghtefoneWebhookTests(TestCase):
         self.assertEqual(detail.status_code, 302)
 
     def test_signed_call_is_visible_on_the_customer_with_unknown_outcome_choice(self):
-        user = get_user_model().objects.create_user(
-            username="webhook-reader", password="safe-test-password"
-        )
-        self.client.force_login(user)
+        self.client.force_login(create_manager("webhook-reader"))
         body = self.payload(event="call_result.created", event_id="evt-unknown", call_id="call-unknown", status="queued")
         self.assertEqual(self.post(body, delivery="delivery-unknown", event="call_result.created").status_code, 200)
 
@@ -304,10 +312,7 @@ class NoghtefoneWebhookTests(TestCase):
         self.assertEqual(self.customer.status, Customer.Status.REJECTED)
         self.assertEqual(CallRecord.objects.count(), 1)
 
-        user = get_user_model().objects.create_user(
-            username="webhook-editor", password="safe-test-password"
-        )
-        self.client.force_login(user)
+        self.client.force_login(create_manager("webhook-editor"))
         edit = self.client.post(
             reverse("crm:call_outcome_update", args=[self.customer.pk, call.pk]),
             {"outcome": CallRecord.Outcome.CALL_AGAIN},

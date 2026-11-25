@@ -339,6 +339,32 @@ class CrmRoleAccessTests(TestCase):
         self.assertNotContains(response, "ویرایش")
         self.assertNotContains(response, 'action="/customers/')
 
+    def test_marketer_sees_assigned_call_history_and_manager_can_edit_it(self):
+        from .models import CallRecord
+
+        CallRecord.objects.create(
+            customer=self.assigned_customer,
+            dialed_number="safe-role-call",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+        self.client.force_login(self.marketer)
+        response = self.client.get(
+            reverse("crm:customer_detail", args=[self.assigned_customer.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تاریخچهٔ تماس‌ها")
+        self.assertContains(response, "safe-role-call")
+        self.assertContains(response, "تماس پاسخ داده شده")
+        self.assertNotContains(response, 'name="outcome"')
+
+        self.client.force_login(self.manager)
+        manager_response = self.client.get(
+            reverse("crm:customer_detail", args=[self.assigned_customer.pk])
+        )
+        self.assertEqual(manager_response.status_code, 200)
+        self.assertContains(manager_response, "safe-role-call")
+        self.assertContains(manager_response, 'name="outcome"')
+
     def test_marketer_cannot_open_unassigned_or_another_marketers_customer(self):
         self.client.force_login(self.marketer)
         for customer in (self.other_customer, self.unassigned_customer):
@@ -426,7 +452,7 @@ class CrmRoleAccessTests(TestCase):
             reverse("crm:customer_create"),
             {
                 "name": "Manager-created record",
-                "category": Customer.Category.CRM,
+"category": Customer.Category.CRM,
                 "status": Customer.Status.NO_CONTACT,
             },
         )
