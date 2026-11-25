@@ -73,6 +73,7 @@ class CategoryCustomerNumberMigrationTests(TransactionTestCase):
         self.assertEqual(Customer.objects.get(name="Old company").customer_number, "C01")
         self.assertEqual(Customer.objects.get(name="Old retail").customer_number, "A01")
         self.assertEqual(Customer.objects.get(name="Legacy unknown").customer_number, "12")
+        self.assertEqual(Sequence.objects.get(category="uncategorized").next_number, 13)
         self.assertEqual(Sequence.objects.get(category="company").next_number, 2)
         self.assertEqual(Sequence.objects.get(category="micro_business").next_number, 2)
 

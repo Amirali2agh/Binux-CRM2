@@ -19,6 +19,10 @@ def categorize_existing_numbers(apps, schema_editor):
         prefix = PREFIXES.get(customer.category)
         if prefix is None:
             # Uncategorized legacy customers keep their existing numeric identifier.
+            legacy_number = int(customer.customer_number)
+            next_by_category[customer.category] = max(
+                next_by_category.get(customer.category, 1), legacy_number + 1
+            )
             customer.customer_number = str(customer.customer_number)
             customer.save(update_fields=("customer_number",), using=database)
             continue
@@ -31,6 +35,7 @@ def categorize_existing_numbers(apps, schema_editor):
         customer.save(update_fields=("customer_number",), using=database)
         next_by_category[customer.category] = number + 1
 
+    Sequence.objects.using(database).all().delete()
     for category in (*PREFIXES, "uncategorized"):
         Sequence.objects.using(database).create(
             category=category, next_number=next_by_category.get(category, 1)
