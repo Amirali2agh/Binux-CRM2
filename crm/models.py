@@ -7,6 +7,7 @@ from django.utils import timezone
 
 
 class CustomerNumberSequence(models.Model):
+    category = models.CharField(max_length=20, unique=True)
     next_number = models.PositiveSmallIntegerField(default=1)
 
 
@@ -36,8 +37,8 @@ class Customer(models.Model):
         ARCHIVE = "archive", "بایگانی"
         TRASH = "trash", "زباله‌دان"
 
-    customer_number = models.PositiveSmallIntegerField(
-        "شماره مشتری", unique=True, editable=False
+    customer_number = models.CharField(
+        "شماره مشتری", max_length=24, unique=True, editable=False
     )
     name = models.CharField("نام مشتری", max_length=255, blank=True)
     business_type = models.CharField("نوع کسب‌وکار", max_length=255, blank=True)
@@ -84,10 +85,6 @@ class Customer(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(customer_number__gte=1, customer_number__lte=9999),
-                name="customer_number_in_range",
-            ),
-            models.CheckConstraint(
                 condition=~models.Q(status="sent") | models.Q(assignee__isnull=False),
                 name="customer_sent_requires_assignee",
             )
@@ -108,14 +105,24 @@ class Customer(models.Model):
                 )
 
     def save(self, *args, **kwargs):
-        if self._state.adding and self.customer_number is None:
+        if self._state.adding and not self.customer_number:
+            prefix_by_category = {
+                self.Category.COMPANY: "C",
+                self.Category.MICRO_BUSINESS: "A",
+                self.Category.CRM: "M",
+                self.Category.ERP: "E",
+            }
+            prefix = prefix_by_category.get(self.category)
+            if prefix is None and self.category != self.Category.UNCATEGORIZED:
+                raise ValidationError({"category": "برای مشتری جدید انتخاب دسته الزامی است."})
             with transaction.atomic():
                 sequence = CustomerNumberSequence.objects.filter(
-                    pk=1, next_number__lte=9999
+                    category=self.category, next_number__lte=9999
                 )
                 if sequence.update(next_number=models.F("next_number") + 1) != 1:
-                    raise ValidationError("ظرفیت شماره مشتری‌ها تکمیل شده است.")
-                self.customer_number = sequence.get().next_number - 1
+                    raise ValidationError("ظرفیت شماره مشتری‌های این دسته تکمیل شده است.")
+                number = sequence.get().next_number - 1
+                self.customer_number = f"{prefix}{number:02d}" if prefix else str(number)
                 return self._save_customer(*args, **kwargs)
         return self._save_customer(*args, **kwargs)
 

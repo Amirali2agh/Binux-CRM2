@@ -24,7 +24,7 @@
   <div class="table-wrap customer-table-wrap">
     <table class="customer-table"><thead><tr><th scope="col">شماره مشتری</th><th scope="col">نام / کسب‌وکار</th><th scope="col">دسته</th><th scope="col">تلفن</th><th scope="col">وضعیت</th><th scope="col">مسئول</th><th scope="col">عملیات</th></tr></thead>
       <tbody>{% for customer in customers %}<tr>
-        <td>{{ customer.customer_number|stringformat:'02d' }}</td>
+        <td>{{ customer.customer_number }}</td>
         <td><a href="{% url 'crm:customer_detail' customer.pk %}">{{ customer.name|default:'بدون نام' }}</a>{% if customer.business_name %}<small>{{ customer.business_name }}</small>{% endif %}{% if customer.restored_from == 'archive' %}<small class="restore-origin">از بایگانی برگشته</small>{% elif customer.restored_from == 'trash' %}<small class="restore-origin">از زباله‌دان برگشته</small>{% endif %}</td>
         <td>{{ customer.get_category_display }}</td>
         <td>{% for phone_label, phone_number in customer.phone_numbers %}<small>{{ phone_label }}: {{ phone_number }}</small>{% empty %}—{% endfor %}</td>

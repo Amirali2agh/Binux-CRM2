@@ -29,7 +29,7 @@ class CustomerForm(forms.ModelForm):
             is_active=True
         ).order_by("username")
         self.fields["assignee"].required = False
-        self.fields["category"].required = False
+        self.fields["category"].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 
@@ -37,8 +37,6 @@ class CustomerForm(forms.ModelForm):
         cleaned_data = super().clean()
         if not cleaned_data.get("status"):
             cleaned_data["status"] = Customer.Status.NO_CONTACT
-        if not cleaned_data.get("category"):
-            cleaned_data["category"] = Customer.Category.UNCATEGORIZED
         return cleaned_data
 
 
