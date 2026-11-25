@@ -176,6 +176,60 @@ class NoghtefoneWebhookTests(TestCase):
         )
         self.assertEqual(CallRecord.objects.count(), 0)
 
+    def test_secondary_and_tertiary_numbers_match(self):
+        secondary = Customer.objects.create(
+            name="Secondary slot",
+            phone="",
+            phone_secondary="09127654321",
+            status_changed_at=self.when - timedelta(days=1),
+        )
+        secondary_body = self.payload(
+            event_id="evt-secondary",
+            call_id="call-secondary",
+            phone="+989127654321",
+        )
+        self.assertEqual(
+            self.post(secondary_body, delivery="delivery-secondary").status_code, 200
+        )
+        self.assertEqual(
+            CallRecord.objects.get(external_id="call-secondary").customer, secondary
+        )
+
+        tertiary = Customer.objects.create(
+            name="Tertiary slot",
+            phone_tertiary="9120001111",
+            status_changed_at=self.when - timedelta(days=1),
+        )
+        tertiary_body = self.payload(
+            event_id="evt-tertiary",
+            call_id="call-tertiary",
+            phone="09120001111",
+        )
+        self.assertEqual(
+            self.post(tertiary_body, delivery="delivery-tertiary").status_code, 200
+        )
+        self.assertEqual(
+            CallRecord.objects.get(external_id="call-tertiary").customer, tertiary
+        )
+        self.assertEqual(CallRecord.objects.filter(customer=self.customer).count(), 0)
+
+    def test_same_number_on_another_customers_slot_is_ambiguous(self):
+        Customer.objects.create(
+            name="Overlap on second number",
+            phone_secondary="+989121234567",
+            status_changed_at=self.when - timedelta(days=1),
+        )
+        response = self.post(
+            self.payload(event_id="evt-cross-slot", call_id="call-cross-slot"),
+            delivery="delivery-cross-slot",
+        )
+        self.assertEqual(response.status_code, 200)
+        event = CallEvent.objects.get(delivery_key="delivery-cross-slot")
+        self.assertEqual(event.disposition, CallEvent.Disposition.AMBIGUOUS)
+        self.assertIsNone(event.customer)
+        self.assertIsNone(event.call_record)
+        self.assertEqual(CallRecord.objects.count(), 0)
+
     def test_bad_signature_and_stale_timestamp_are_rejected_without_storage(self):
         body = self.payload()
         with self.assertLogs("crm.views", level="WARNING") as logs:
@@ -313,6 +367,14 @@ class PhoneNormalizationTests(TestCase):
     def test_non_numeric_crm_values_keep_their_own_key(self):
         self.assertEqual(phone_match_key("test-known-number"), "test-known-number")
         self.assertEqual(normalize_phone("test-known-number"), "")
+
+    def test_the_same_subscriber_in_two_slots_is_one_key(self):
+        from crm.phones import unique_phone_keys
+
+        self.assertEqual(
+            unique_phone_keys(("09121234567", "+989121234567", "")),
+            [("989121234567", "09121234567")],
+        )
 
 
 class SignatureUnitTests(TestCase):

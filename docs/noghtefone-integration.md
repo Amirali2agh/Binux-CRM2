@@ -39,7 +39,7 @@ Other documented events (`recording.ready`, `transcript.ready`, `insight.ready`,
 
 ## What gets associated
 
-A call is linked to a customer only when the normalized number belongs to exactly one customer in the whole CRM, and that customer is not archived or in Trash. These Iranian forms are the same number: `09121234567`, `+989121234567`, `989121234567`, and `9121234567` (Persian digits are accepted). Inbound events use the caller fields; other events use the callee fields.
+A call is linked to a customer only when the normalized number belongs to exactly one customer in the whole CRM, on any of that customer's three phone fields, and that customer is not archived or in Trash. These Iranian forms are the same number: `09121234567`, `+989121234567`, `989121234567`, and `9121234567` (Persian digits are accepted). Inbound events use the caller fields; other events use the callee fields. A number that matches nobody is stored as unmatched. A number that matches more than one customer, on any slot, is stored as ambiguous and is not attached.
 
 | Situation | Stored delivery | Call history | Customer status |
 | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ Deliveries are visible in Django admin under Call events (read-only), including 
 NOGHTE_API_KEY_FILE=/secure/path/to/api-key .venv/bin/python manage.py sync_noghte_calls --since YYYY-MM-DD
 ```
 
-The command queries outbound history only for numbers that belong to exactly one non-archived, non-trashed customer, using the same normalization as webhooks. It sends the phone string stored on the customer as the `number` query parameter. Rows whose number does not match, inbound rows, and rows with no status are skipped. An unrecognized status is imported as `unknown` and does not change the customer. Provider call ids keep retries idempotent. Output is aggregate counts and does not include phone numbers or the API key.
+The command queries outbound history for every normalized number found on the three phone fields of exactly one non-archived, non-trashed customer. The same subscriber stored in two slots of one customer is queried once. It sends the stored phone string for that slot as the `number` query parameter. Rows whose number does not match, inbound rows, and rows with no status are skipped. An unrecognized status is imported as `unknown` and does not change the customer. Provider call ids keep retries idempotent. Output is aggregate counts and does not include phone numbers or the API key.
 
 The documented tests mock HTTP. Do not point this command at a live CRM database as part of a feature check, and do not call the real Noghtefone API from tests.
 

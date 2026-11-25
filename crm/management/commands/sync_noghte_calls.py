@@ -9,7 +9,7 @@ from django.utils.dateparse import parse_datetime
 from crm.call_ingestion import apply_customer_status, should_replace_outcome
 from crm.integrations.noghte import NoghteAPIClient, NoghteAPIError, map_call_status
 from crm.models import CallRecord, Customer
-from crm.phones import phone_match_key
+from crm.phones import phone_match_key, unique_phone_keys
 
 
 class Command(BaseCommand):
@@ -38,14 +38,22 @@ class Command(BaseCommand):
 
         customers_by_phone = defaultdict(list)
         phone_record_counts = defaultdict(int)
-        customers = Customer.objects.exclude(phone="").order_by("pk")
+        query_values = {}
+        customers = Customer.objects.exclude(
+            phone="", phone_secondary="", phone_tertiary=""
+        ).order_by("pk")
         for customer in customers.iterator():
-            match_key = phone_match_key(customer.phone)
-            if not match_key:
+            pairs = unique_phone_keys(
+                (customer.phone, customer.phone_secondary, customer.phone_tertiary)
+            )
+            if not pairs:
                 continue
-            phone_record_counts[match_key] += 1
-            if customer.archived_at is None and customer.trashed_at is None:
-                customers_by_phone[match_key].append(customer)
+            active = customer.archived_at is None and customer.trashed_at is None
+            for match_key, raw in pairs:
+                phone_record_counts[match_key] += 1
+                if active:
+                    customers_by_phone[match_key].append(customer)
+                    query_values.setdefault(match_key, raw)
 
         stats = defaultdict(int)
         for match_key in sorted(customers_by_phone):
@@ -54,7 +62,7 @@ class Command(BaseCommand):
                 stats["ambiguous"] += 1
                 continue
             customer = matches[0]
-            phone = customer.phone
+            phone = query_values[match_key]
             try:
                 provider_calls = list(client.iter_calls(number=phone, since=since))
             except NoghteAPIError:

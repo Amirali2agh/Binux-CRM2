@@ -72,7 +72,7 @@ Deleting a customer moves it to trash rather than deleting it immediately. It re
 
 Issue #25 connects CRM call history to Noghtefone. Signed webhooks are the primary ingestion path. `sync_noghte_calls` is an operator-run, read-only outbound backfill. Neither path places calls. No scheduler is configured. Details and open provider questions are in `docs/noghtefone-integration.md`.
 
-Iranian numbers `0912…`, `+98912…`, `98912…`, and `912…` are the same subscriber. A call is associated only when that key belongs to exactly one CRM customer and that customer is not archived or in Trash. Unknown numbers are stored on a delivery row and are not attached to a customer. A number shared with any other record, including an archived or trashed one, is ambiguous and is not attached.
+Iranian numbers `0912…`, `+98912…`, `98912…`, and `912…` are the same subscriber. Each customer has three phone fields, and a call matches when any of those fields normalizes to the call number. A call is associated only when exactly one customer has that key and that customer is not archived or in Trash. Unknown numbers are stored on a delivery row and are not attached. A number shared across customers, on any of the three fields and including an archived or trashed record, is ambiguous and is not attached.
 
 - `call.answered`, and provider status `answered`, map to call outcome `answered` and customer status `رد شده` (Rejected).
 - `busy`, `failed`, `missed`, and `no_answer` map to call outcome `call_again` and customer status `تماس مجدد` (Call again).

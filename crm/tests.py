@@ -1795,6 +1795,60 @@ class NoghteCallSyncCommandTests(TestCase):
         self.assertNotIn("9125556677", requested)
         self.assertNotIn("+989125556677", requested)
 
+    def test_secondary_and_tertiary_numbers_are_polled_and_associated(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        secondary = self.make_customer("")
+        secondary.phone_secondary = "09123330000"
+        secondary.save(update_fields=("phone", "phone_secondary", "updated_at"))
+        tertiary = self.make_customer("")
+        tertiary.phone_tertiary = "9144400000"
+        tertiary.save(update_fields=("phone", "phone_tertiary", "updated_at"))
+        calls = {
+            "09123330000": [self.provider_call("provider-secondary", "+989123330000")],
+            "9144400000": [
+                self.provider_call("provider-tertiary", "09144400000", status="no_answer")
+            ],
+        }
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=lambda *, number, since: iter(calls[number]),
+        ) as lookup:
+            self.run_sync()
+
+        self.assertEqual(
+            CallRecord.objects.get(external_id="provider-secondary").customer, secondary
+        )
+        tertiary_call = CallRecord.objects.get(external_id="provider-tertiary")
+        self.assertEqual(tertiary_call.customer, tertiary)
+        self.assertEqual(tertiary_call.outcome, CallRecord.Outcome.CALL_AGAIN)
+        self.assertCountEqual(
+            [call.kwargs["number"] for call in lookup.call_args_list],
+            ["09123330000", "9144400000"],
+        )
+
+    def test_number_shared_across_customer_slots_is_not_polled(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        left = self.make_customer("")
+        left.phone_secondary = "09126667777"
+        left.save(update_fields=("phone", "phone_secondary", "updated_at"))
+        self.make_customer("+989126667777")
+        with patch.object(
+            NoghteAPIClient, "iter_calls", side_effect=lambda **kwargs: iter([])
+        ) as lookup:
+            self.run_sync()
+
+        requested = [call.kwargs["number"] for call in lookup.call_args_list]
+        self.assertNotIn("09126667777", requested)
+        self.assertNotIn("+989126667777", requested)
+
     def test_duplicate_customer_numbers_are_skipped_without_provider_lookup(self):
         from unittest.mock import patch
 

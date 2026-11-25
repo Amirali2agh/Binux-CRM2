@@ -11,7 +11,7 @@ from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
 
 from crm.models import CallEvent, CallRecord, Customer
-from crm.phones import phone_match_key
+from crm.phones import unique_phone_keys
 
 
 class IngestTemporarilyUnavailable(Exception):
@@ -180,13 +180,21 @@ def _associate_call(*, call_external_id, dialed_number, normalized_phone, outcom
     if outcome not in allowed:
         return _Association(CallEvent.Disposition.FAILED, "Call outcome is not recognized.")
 
-    matches = [
-        customer
-        for customer in Customer.objects.exclude(phone="").only(
-            "id", "phone", "archived_at", "trashed_at"
-        )
-        if phone_match_key(customer.phone) == normalized_phone
-    ]
+    matches = []
+    customers = Customer.objects.exclude(
+        phone="", phone_secondary="", phone_tertiary=""
+    ).only(
+        "id", "phone", "phone_secondary", "phone_tertiary", "archived_at", "trashed_at"
+    )
+    for customer in customers:
+        keys = {
+            key
+            for key, _raw in unique_phone_keys(
+                (customer.phone, customer.phone_secondary, customer.phone_tertiary)
+            )
+        }
+        if normalized_phone in keys:
+            matches.append(customer)
     if not matches:
         return _Association(CallEvent.Disposition.UNMATCHED, "No customer has this number.")
     if len(matches) != 1:

@@ -33,6 +33,23 @@ def normalize_phone(value):
     return ""
 
 
+def unique_phone_keys(values):
+    """Unique ``(match_key, stored_value)`` pairs, in field order.
+
+    A customer can store the same subscriber in more than one slot. Those slots
+    count as one key so the customer is not treated as ambiguous with itself.
+    """
+    found = []
+    seen = set()
+    for raw in values:
+        key = phone_match_key(raw)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        found.append((key, raw if isinstance(raw, str) else ""))
+    return found
+
+
 def phone_match_key(value):
     """Key used to compare a CRM phone with a provider phone."""
     if not isinstance(value, str):
