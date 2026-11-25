@@ -239,6 +239,16 @@ class CrmRoleAccessTests(TestCase):
         self.assertContains(followups, "Assigned record")
         self.assertNotContains(followups, "Other marketer record")
 
+    def test_marketer_can_read_assigned_detail_without_mutation_controls(self):
+        self.client.force_login(self.marketer)
+        response = self.client.get(
+            reverse("crm:customer_detail", args=[self.assigned_customer.pk])
+        )
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "ویرایش")
+        self.assertNotContains(response, 'action="/customers/')
+
     def test_marketer_cannot_open_unassigned_or_another_marketers_customer(self):
         self.client.force_login(self.marketer)
         for customer in (self.other_customer, self.unassigned_customer):
