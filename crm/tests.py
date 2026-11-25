@@ -52,6 +52,37 @@ class CustomerNumberMigrationTests(TransactionTestCase):
         super().tearDown()
 
 
+class CategoryCustomerNumberMigrationTests(TransactionTestCase):
+    migrate_from = ("crm", "0008_customernumbersequence_customer_customer_number_and_more")
+    migrate_to = ("crm", "0009_category_customer_numbers")
+
+    def test_categories_receive_prefixes_and_uncategorized_numbers_stay_unchanged(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+        Customer = old_apps.get_model("crm", "Customer")
+        Customer.objects.create(name="Old company", category="company", customer_number=42)
+        Customer.objects.create(name="Old retail", category="micro_business", customer_number=7)
+        Customer.objects.create(name="Legacy unknown", category="uncategorized", customer_number=12)
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        apps = executor.loader.project_state([self.migrate_to]).apps
+        Customer = apps.get_model("crm", "Customer")
+        Sequence = apps.get_model("crm", "CustomerNumberSequence")
+        self.assertEqual(Customer.objects.get(name="Old company").customer_number, "C01")
+        self.assertEqual(Customer.objects.get(name="Old retail").customer_number, "A01")
+        self.assertEqual(Customer.objects.get(name="Legacy unknown").customer_number, "12")
+        self.assertEqual(Sequence.objects.get(category="uncategorized").next_number, 13)
+        self.assertEqual(Sequence.objects.get(category="company").next_number, 2)
+        self.assertEqual(Sequence.objects.get(category="micro_business").next_number, 2)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+
 class CustomerPhoneMigrationTests(TransactionTestCase):
     migrate_from = ("crm", "0006_customer_category")
     migrate_to = ("crm", "0007_customer_phone_secondary_customer_phone_tertiary")
@@ -381,6 +412,7 @@ class CustomerWorkflowTests(TestCase):
             "name": "",
             "business_type": "",
             "business_name": "",
+            "category": Customer.Category.CRM,
             "phone": "",
             "phone_secondary": "",
             "phone_tertiary": "",
@@ -394,34 +426,47 @@ class CustomerWorkflowTests(TestCase):
         return data
 
     def test_customer_numbers_are_sequential_unique_and_displayed_with_minimum_two_digits(self):
-        first = Customer.objects.create(name="First numbered")
-        second = Customer.objects.create(name="Second numbered")
-        self.assertEqual((first.customer_number, second.customer_number), (1, 2))
+        first = Customer.objects.create(name="First numbered", category=Customer.Category.COMPANY)
+        second = Customer.objects.create(name="Second numbered", category=Customer.Category.COMPANY)
+        retail = Customer.objects.create(name="Retail numbered", category=Customer.Category.MICRO_BUSINESS)
+        crm_customer = Customer.objects.create(name="CRM numbered", category=Customer.Category.CRM)
+        erp_customer = Customer.objects.create(name="ERP numbered", category=Customer.Category.ERP)
+        self.assertEqual((first.customer_number, second.customer_number), ("C01", "C02"))
+        self.assertEqual(retail.customer_number, "A01")
+        self.assertEqual(crm_customer.customer_number, "M01")
+        self.assertEqual(erp_customer.customer_number, "E01")
         first.delete()
-        third = Customer.objects.create(name="Third numbered")
-        self.assertEqual(third.customer_number, 3)
+        third = Customer.objects.create(name="Third numbered", category=Customer.Category.COMPANY)
+        self.assertEqual(third.customer_number, "C03")
 
         response = self.client.get(reverse("crm:customer_list"))
-        self.assertContains(response, "02")
-        self.assertContains(response, "03")
+        self.assertContains(response, "C02")
+        self.assertContains(response, "C03")
+        self.assertContains(response, "A01")
 
-    def test_customer_number_database_constraint_rejects_out_of_range_values(self):
+    def test_customer_number_database_constraint_rejects_duplicate_values(self):
+        Customer.objects.create(name="First company", category=Customer.Category.COMPANY)
         with self.assertRaises(IntegrityError), transaction.atomic():
             Customer.objects.bulk_create(
-                [Customer(name="Invalid number", customer_number=10000)]
+                [Customer(name="Duplicate", category=Customer.Category.COMPANY, customer_number="C01")]
             )
+
+    def test_customer_number_supports_three_digits(self):
+        from .models import CustomerNumberSequence
+
+        CustomerNumberSequence.objects.filter(category=Customer.Category.ERP).update(next_number=100)
+        customer = Customer.objects.create(name="Hundredth ERP", category=Customer.Category.ERP)
+        self.assertEqual(customer.customer_number, "E100")
 
     def test_customer_creation_reports_number_capacity_exhaustion(self):
         from .models import CustomerNumberSequence
 
-        sequence = CustomerNumberSequence.objects.get(pk=1)
-        sequence.next_number = 10000
-        sequence.save(update_fields=("next_number",))
+        CustomerNumberSequence.objects.filter(category=Customer.Category.COMPANY).update(next_number=10000)
         response = self.client.post(
-            reverse("crm:customer_create"), self.customer_data(name="At capacity")
+            reverse("crm:customer_create"), self.customer_data(name="At capacity", category=Customer.Category.COMPANY)
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "ظرفیت شماره مشتری‌ها تکمیل شده است.")
+        self.assertContains(response, "ظرفیت شماره مشتری‌های این دسته تکمیل شده است.")
         self.assertFalse(Customer.objects.filter(name="At capacity").exists())
 
     def test_customer_list_filters_by_name_business_type_and_status(self):
@@ -449,17 +494,16 @@ class CustomerWorkflowTests(TestCase):
         self.assertContains(create_page, reverse("crm:customer_list"))
         self.assertNotContains(create_page, "فیلتر مشتریان")
 
-    def test_customer_category_defaults_and_can_be_selected_on_customer_form(self):
+    def test_customer_category_is_required_and_can_be_selected_on_customer_form(self):
         default_response = self.client.post(reverse("crm:customer_create"), {})
-        self.assertEqual(default_response.status_code, 302)
-        default_customer = Customer.objects.get()
+        self.assertEqual(default_response.status_code, 200)
+        self.assertFalse(Customer.objects.exists())
         selected_response = self.client.post(
             reverse("crm:customer_create"),
             self.customer_data(name="ERP customer", category=Customer.Category.ERP),
         )
         self.assertEqual(selected_response.status_code, 302)
         selected_customer = Customer.objects.get(name="ERP customer")
-        self.assertEqual(default_customer.category, Customer.Category.UNCATEGORIZED)
         self.assertEqual(selected_customer.category, Customer.Category.ERP)
         response = self.client.get(reverse("crm:customer_create"))
         self.assertContains(response, "دسته مشتری")
@@ -606,8 +650,11 @@ class CustomerWorkflowTests(TestCase):
             ["تماس تلفنی", "دیوار", "حضوری", "سایر"],
         )
 
-    def test_all_customer_fields_are_optional_and_record_persists(self):
-        response = self.client.post(reverse("crm:customer_create"), {})
+    def test_non_category_customer_fields_are_optional_and_record_persists(self):
+        response = self.client.post(
+            reverse("crm:customer_create"),
+            self.customer_data(category=Customer.Category.ERP),
+        )
         self.assertEqual(response.status_code, 302)
         customer = Customer.objects.get()
         self.assertEqual(customer.name, "")
