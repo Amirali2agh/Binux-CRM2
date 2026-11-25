@@ -125,11 +125,13 @@ class CustomerForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assignee_queryset = get_user_model().objects.filter(is_active=True)
+        assignee_queryset = get_user_model().objects.all()
         if self.instance.pk and self.instance.assignee_id:
             assignee_queryset = assignee_queryset.filter(
                 Q(is_active=True) | Q(pk=self.instance.assignee_id)
             )
+        else:
+            assignee_queryset = assignee_queryset.filter(is_active=True)
         self.fields["assignee"].queryset = assignee_queryset.order_by("username")
         self.fields["assignee"].required = False
         self.fields["category"].required = True
