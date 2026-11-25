@@ -97,7 +97,7 @@ The app uses a local SQLite database at `db.sqlite3` by default. After installin
 .venv/bin/python manage.py createsuperuser
 ```
 
-Sign in at `/admin/` and create active team users there. Team users share the same customer access level; there is no public sign-up or role hierarchy. Do not use the local fallback secret or debug settings in a public deployment.
+Sign in at `/admin/` and create active team users there. The temporary role rollout promotes every account already present to `CRM Manager` when migration `0010_elevate_existing_users_to_manager` is applied; it removes their `CRM Marketer` membership but preserves unrelated Django groups and does not change staff/superuser flags. Accounts created after that migration receive no CRM role automatically. Marketer access remains pending the owner's decision. Do not use the local fallback secret or debug settings in a public deployment.
 
 The `process_customer_lifecycle` management command archives rejected customers at the two-hour boundary and permanently removes archived/trash records after their retention periods. A deployment must run this command periodically (for example, every five minutes) for those automatic transitions to execute. No production scheduler or deployment is configured by this repository; choose and monitor one before using real customer data. The command is transactional and safe to retry.
 

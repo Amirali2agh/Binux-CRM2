@@ -25,6 +25,60 @@ def create_manager_user(username, **kwargs):
     return user
 
 
+class ExistingUserManagerRoleMigrationTests(TransactionTestCase):
+    migrate_from = [
+        ("crm", "0009_crm_role_groups"),
+        ("crm", "0009_category_customer_numbers"),
+    ]
+    migrate_to = ("crm", "0010_elevate_existing_users_to_manager")
+
+    def test_existing_users_become_managers_without_changing_other_groups(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_from)
+        old_apps = executor.loader.project_state(self.migrate_from).apps
+        User = old_apps.get_model("auth", "User")
+        Group = old_apps.get_model("auth", "Group")
+        manager, _ = Group.objects.get_or_create(name="CRM Manager")
+        marketer, _ = Group.objects.get_or_create(name="CRM Marketer")
+        unrelated, _ = Group.objects.get_or_create(name="Unrelated test group")
+
+        User.objects.create(username="existing-unassigned")
+        marketer_user = User.objects.create(username="existing-marketer")
+        dual_role_user = User.objects.create(username="existing-dual-role")
+        marketer_user.groups.add(marketer)
+        dual_role_user.groups.add(manager, marketer, unrelated)
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        migrated_apps = executor.loader.project_state([self.migrate_to]).apps
+        MigratedUser = migrated_apps.get_model("auth", "User")
+        existing_usernames = (
+            "existing-unassigned",
+            "existing-marketer",
+            "existing-dual-role",
+        )
+        for username in existing_usernames:
+            with self.subTest(username=username):
+                user = MigratedUser.objects.get(username=username)
+                names = set(user.groups.values_list("name", flat=True))
+                self.assertIn("CRM Manager", names)
+                self.assertNotIn("CRM Marketer", names)
+        self.assertIn(
+            "Unrelated test group",
+            set(
+                MigratedUser.objects.get(username="existing-dual-role")
+                .groups.values_list("name", flat=True)
+            ),
+        )
+        future_user = MigratedUser.objects.create(username="future-unassigned")
+        self.assertEqual(future_user.groups.count(), 0)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+
 class CustomerNumberMigrationTests(TransactionTestCase):
     def test_existing_customers_are_numbered_by_creation_order(self):
         from datetime import datetime, timezone as datetime_timezone
@@ -370,7 +424,11 @@ class CrmRoleAccessTests(TestCase):
         self.assertContains(response, "Assigned record")
         created = self.client.post(
             reverse("crm:customer_create"),
-            {"name": "Manager-created record", "status": Customer.Status.NO_CONTACT},
+            {
+                "name": "Manager-created record",
+                "category": Customer.Category.CRM,
+                "status": Customer.Status.NO_CONTACT,
+            },
         )
         self.assertEqual(created.status_code, 302)
         self.assertTrue(Customer.objects.filter(name="Manager-created record").exists())

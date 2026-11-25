@@ -2,7 +2,7 @@
 
 ## Current application (verified in the repository)
 
-The current app is a server-rendered Django site. Customer records persist in the configured local SQLite database. Every CRM application page requires a Django team session, including display-only roadmap destinations; the public login screen is the only application page available before sign-in. Django admin retains its separate authentication. Non-customer roadmap pages remain display-only and use clearly fictional examples.
+The current app is a server-rendered Django site. Customer records persist in the configured local SQLite database. Every CRM application page requires a Django team session, including display-only roadmap pages; the public login screen is the only application page available before sign-in. CRM access is enforced by explicit roles. The temporary role rollout promotes every account existing when migration `0010_elevate_existing_users_to_manager` is applied to `CRM Manager`; future accounts receive no role automatically, and marketer access remains pending the owner's decision. Django admin retains its separate authentication. Non-customer roadmap pages remain display-only and use clearly fictional examples.
 
 A request follows this path:
 
