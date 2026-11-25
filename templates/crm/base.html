@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load static crm_roles %}<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -35,7 +35,7 @@
     <div class="sidebar-profile"><span class="avatar" aria-hidden="true">ب</span><span class="profile-copy"><strong>{% if request.user.is_authenticated %}{{ request.user.get_username }}{% else %}بازدیدکننده{% endif %}</strong><small>{% if request.user.is_authenticated %}عضو تیم{% else %}برای مشتریان وارد شوید{% endif %}</small></span></div>
     <div class="search-placeholder" role="note"><svg class="icon search-symbol" aria-hidden="true"><use href="#icon-search"/></svg><span>جست‌وجو در فاز بعد</span></div>
     <nav class="sidebar-nav" aria-label="بخش‌های CRM">
-      {% for nav_section in sections %}
+      {% for nav_section in sections|for_user:request.user %}
       <div class="nav-group" data-group="{{ nav_section.slug }}" data-active="{% if nav_section.slug == section.slug %}true{% else %}false{% endif %}">
         <button class="group-toggle" type="button" aria-expanded="true" aria-controls="submenu-{{ nav_section.slug }}" aria-label="{{ nav_section.title }}">
           <svg class="icon group-icon" aria-hidden="true"><use href="#icon-{{ nav_section.icon }}"/></svg>

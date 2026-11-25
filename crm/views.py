@@ -21,6 +21,11 @@ from .catalog import PAGES, SECTIONS
 from .forms import CallOutcomeForm, CustomerForm
 from .jalali_calendar import build_month
 from .models import CallRecord, Customer
+from .roles import (
+    customer_queryset_for_user,
+    manager_required,
+    role_required,
+)
 
 
 class TeamLoginView(LoginView):
@@ -70,6 +75,7 @@ def _customer_context(title, customers, *, page_key="customer_list"):
 
 
 @login_required
+@manager_required
 @require_safe
 def display_page(request, page_key):
     section, page = PAGES[page_key]
@@ -92,6 +98,7 @@ def display_page(request, page_key):
 
 
 @login_required
+@manager_required
 @require_safe
 def calendar_view(request):
     month_value = request.GET.get("month")
@@ -128,9 +135,10 @@ def calendar_view(request):
 
 
 @login_required
+@role_required
 @require_safe
 def customer_list(request):
-    customers = _active_customers().exclude(
+    customers = customer_queryset_for_user(_active_customers(), request.user).exclude(
         status=Customer.Status.COMPLETED
     ).select_related("assignee")
     name = request.GET.get("name", "").strip()
@@ -210,9 +218,10 @@ def customer_list(request):
 
 
 @login_required
+@role_required
 @require_safe
 def customer_follow_ups(request):
-    customers = Customer.objects.filter(
+    customers = customer_queryset_for_user(Customer.objects.all(), request.user).filter(
         status__in=(Customer.Status.FOLLOW_UP, Customer.Status.SENT),
         archived_at__isnull=True, trashed_at__isnull=True,
     ).select_related("assignee")
@@ -223,6 +232,7 @@ def customer_follow_ups(request):
 
 
 @login_required
+@manager_required
 @require_safe
 def customer_tasks(request):
     customers = _active_customers().filter(
@@ -235,6 +245,7 @@ def customer_tasks(request):
 
 
 @login_required
+@manager_required
 @require_safe
 def completed_customers(request):
     customers = Customer.objects.filter(
@@ -261,6 +272,7 @@ def completed_customers(request):
 
 
 @login_required
+@manager_required
 @require_safe
 def customer_archive(request):
     rejection_cutoff = timezone.now() - timedelta(hours=2)
@@ -279,6 +291,7 @@ def customer_archive(request):
 
 
 @login_required
+@manager_required
 @require_safe
 def customer_trash(request):
     customers = Customer.objects.filter(trashed_at__isnull=False).select_related(
@@ -295,6 +308,7 @@ def _active_customer(pk):
 
 
 @login_required
+@manager_required
 @require_http_methods(["GET", "POST"])
 def customer_create(request):
     form = CustomerForm(
@@ -314,10 +328,14 @@ def customer_create(request):
 
 
 @login_required
+@role_required
 @require_safe
 def customer_detail(request, pk):
     customer = get_object_or_404(
-        Customer.objects.select_related("assignee").prefetch_related("call_records"),
+        customer_queryset_for_user(
+            Customer.objects.select_related("assignee").prefetch_related("call_records"),
+            request.user,
+        ),
         pk=pk,
     )
     auto_archive_due = (
@@ -337,6 +355,7 @@ def customer_detail(request, pk):
 
 
 @login_required
+@manager_required
 @require_POST
 def call_outcome_update(request, pk, call_pk):
     customer = get_object_or_404(Customer, pk=pk)
@@ -349,6 +368,7 @@ def call_outcome_update(request, pk, call_pk):
 
 
 @login_required
+@manager_required
 @require_http_methods(["GET", "POST"])
 def customer_update(request, pk):
     customer = _active_customer(pk)
@@ -366,6 +386,7 @@ def customer_update(request, pk):
 
 
 @login_required
+@manager_required
 @require_POST
 def customer_delete(request, pk):
     customer = _active_customer(pk)
@@ -374,6 +395,7 @@ def customer_delete(request, pk):
 
 
 @login_required
+@manager_required
 @require_POST
 def customer_archive_action(request, pk):
     customer = _active_customer(pk)
@@ -382,6 +404,7 @@ def customer_archive_action(request, pk):
 
 
 @login_required
+@manager_required
 @require_POST
 def customer_restore(request, pk):
     customer = get_object_or_404(Customer, pk=pk)

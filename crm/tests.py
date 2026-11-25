@@ -13,7 +13,16 @@ from django.utils import timezone
 
 from .forms import CustomerForm
 from .jalali_calendar import build_month
-from .models import Customer
+from .models import CallRecord, Customer
+
+
+def create_manager_user(username, **kwargs):
+    user = get_user_model().objects.create_user(
+        username=username, password="safe-test-password", **kwargs
+    )
+    group, _ = Group.objects.get_or_create(name="CRM Manager")
+    user.groups.add(group)
+    return user
 
 
 class CustomerNumberMigrationTests(TransactionTestCase):
@@ -108,9 +117,7 @@ class FakeHTTPResponse(BytesIO):
 
 class LoginGateTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            username="login-gate-user", password="safe-test-password"
-        )
+        self.user = create_manager_user("login-gate-user")
 
     def test_anonymous_visitors_are_redirected_from_every_crm_page(self):
         for name, _, _ in PAGES:
@@ -226,6 +233,9 @@ class CrmRoleAccessTests(TestCase):
         self.assertNotContains(customers, "Other marketer record")
         self.assertNotContains(customers, "Unassigned record")
         self.assertNotContains(customers, "Manager-only record")
+        self.assertNotContains(customers, 'href="/customers/new/"')
+        self.assertNotContains(customers, 'href="/finance/')
+        self.assertNotContains(customers, 'href="/customers/completed/"')
         self.assertContains(followups, "Assigned record")
         self.assertNotContains(followups, "Other marketer record")
 
@@ -240,6 +250,11 @@ class CrmRoleAccessTests(TestCase):
 
     def test_marketer_cannot_use_write_actions_or_other_crm_areas(self):
         self.client.force_login(self.marketer)
+        call = CallRecord.objects.create(
+            customer=self.assigned_customer,
+            dialed_number="safe-test-number",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
         denied = (
             self.client.post(reverse("crm:customer_create"), {"name": "Injected"}),
             self.client.post(
@@ -249,6 +264,23 @@ class CrmRoleAccessTests(TestCase):
             self.client.post(
                 reverse("crm:customer_delete", args=[self.assigned_customer.pk])
             ),
+            self.client.post(
+                reverse("crm:customer_archive_action", args=[self.assigned_customer.pk])
+            ),
+            self.client.post(
+                reverse("crm:customer_restore", args=[self.assigned_customer.pk])
+            ),
+            self.client.post(
+                reverse(
+                    "crm:call_outcome_update",
+                    args=[self.assigned_customer.pk, call.pk],
+                ),
+                {"outcome": CallRecord.Outcome.CALL_AGAIN},
+            ),
+            self.client.get(reverse("crm:tasks")),
+            self.client.get(reverse("crm:completed_customers")),
+            self.client.get(reverse("crm:customer_archive")),
+            self.client.get(reverse("crm:customer_trash")),
             self.client.get(reverse("crm:calendar")),
             self.client.get(reverse("crm:office_inventory")),
         )
@@ -270,6 +302,21 @@ class CrmRoleAccessTests(TestCase):
         self.client.force_login(user)
         self.assertEqual(self.client.get(reverse("crm:customer_list")).status_code, 403)
 
+    def test_user_with_conflicting_roles_has_no_crm_access(self):
+        user = self.create_user_with_role("conflicting-role-user", "CRM Manager")
+        marketer_group, _ = Group.objects.get_or_create(name="CRM Marketer")
+        user.groups.add(marketer_group)
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("crm:customer_list")).status_code, 403)
+
+    def test_unassigned_superuser_can_explicitly_bootstrap_roles_in_admin(self):
+        user = get_user_model().objects.create_superuser(
+            username="role-bootstrap-admin", password="safe-test-password",
+            email="bootstrap@example.invalid",
+        )
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("admin:index")).status_code, 200)
+
     def test_manager_retains_full_customer_access_and_can_create(self):
         self.client.force_login(self.manager)
         response = self.client.get(reverse("crm:customer_list"))
@@ -285,9 +332,7 @@ class CrmRoleAccessTests(TestCase):
 
 class DisplayOnlyPagesTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            username="demo-reader", password="safe-test-password"
-        )
+        self.user = create_manager_user("demo-reader")
         self.client.force_login(self.user)
 
     def test_all_17_named_routes_render_distinct_demo_pages(self):
@@ -386,9 +431,7 @@ class DisplayOnlyPagesTests(TestCase):
 
 class JalaliCalendarTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            username="calendar-reader", password="safe-test-password"
-        )
+        self.user = create_manager_user("calendar-reader")
         self.client.force_login(self.user)
 
     def test_calendar_requires_authentication(self):
@@ -465,9 +508,7 @@ class CustomerWorkflowTests(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
 
-        self.user = get_user_model().objects.create_user(
-            username="team-member", password="safe-test-password"
-        )
+        self.user = create_manager_user("team-member")
         self.client.force_login(self.user)
 
     def customer_data(self, **overrides):
@@ -1020,9 +1061,7 @@ class CustomerLifecycleCommandTests(TestCase):
 
 class CustomerCallHistoryTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            username="call-history-member", password="safe-test-password"
-        )
+        self.user = create_manager_user("call-history-member")
         self.client.force_login(self.user)
 
     def test_call_record_stores_customer_number_and_supported_outcomes(self):
