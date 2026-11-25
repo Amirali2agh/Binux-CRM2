@@ -9,7 +9,7 @@ web
 Django (Python) with server-rendered HTML templates, CSS, and plain JavaScript for sidebar navigation. This stack was explicitly requested before the issue planning.
 
 ## Users
-The initial audience is the internal team. Django's built-in authentication and administration provision team accounts with the same access level; no role hierarchy or public self-sign-up is requested.
+The initial audience is the internal team. Django's built-in authentication and administration provision team accounts. For the temporary rollout, every account that exists when the manager-role migration is applied is assigned `CRM Manager`; future accounts receive no CRM role automatically. Marketer access is pending an explicit owner decision.
 
 ## Product Purpose
 An educational, internal CRM for managing customers and assigned work. The application provides the first persistent, authenticated customer workflow; other menu destinations remain a roadmap, not a list of implemented features.
