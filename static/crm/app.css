@@ -1247,6 +1247,9 @@ html[data-theme="dark"] .jalali-calendar th:last-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+@media (max-width: 760px) {
+  .dashboard-charts { grid-template-columns: minmax(0, 1fr); }
+}
 @media (prefers-reduced-motion: reduce) {
   .theme-switch-thumb {
     transition: none;
