@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -14,6 +16,14 @@ ROLE_CHOICES = (
     ("CRM Manager", "مدیر"),
     ("CRM Marketer", "بازاریاب"),
 )
+
+CUSTOMER_NUMBER_PREFIXES = {
+    Customer.Category.COMPANY: "C",
+    Customer.Category.MICRO_BUSINESS: "A",
+    Customer.Category.CRM: "M",
+    Customer.Category.ERP: "E",
+    Customer.Category.UNCATEGORIZED: "",
+}
 
 
 class TeamUserCreationForm(UserCreationForm):
@@ -157,3 +167,77 @@ class CallOutcomeForm(forms.ModelForm):
         if commit:
             call.save()
         return call
+
+
+class CustomerAssignmentForm(forms.Form):
+    RANGE = "range"
+    EXPLICIT = "explicit"
+    mode = forms.ChoiceField(
+        choices=((RANGE, "بازهٔ شماره"), (EXPLICIT, "شماره‌های انتخابی")),
+        label="روش انتخاب مشتری",
+    )
+    category = forms.ChoiceField(choices=Customer.Category.choices, label="دسته مشتری")
+    start_number = forms.IntegerField(required=False, min_value=1, max_value=9999, label="از شماره")
+    end_number = forms.IntegerField(required=False, min_value=1, max_value=9999, label="تا شماره")
+    customer_numbers = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "dir": "ltr"}),
+        label="شماره مشتری‌ها",
+        help_text="شماره‌ها را با ویرگول یا خط جدید جدا کنید.",
+    )
+    assignee = forms.ModelChoiceField(
+        queryset=get_user_model().objects.filter(is_active=True).order_by("username"),
+        label="ارجاع به کاربر فعال",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+
+    def clean(self):
+        cleaned = super().clean()
+        mode = cleaned.get("mode")
+        category = cleaned.get("category")
+        if mode == self.RANGE:
+            start = cleaned.get("start_number")
+            end = cleaned.get("end_number")
+            if start is None:
+                self.add_error("start_number", "شمارهٔ آغاز بازه را وارد کنید.")
+            if end is None:
+                self.add_error("end_number", "شمارهٔ پایان بازه را وارد کنید.")
+            if start is not None and end is not None and start > end:
+                self.add_error("end_number", "پایان بازه باید برابر یا بزرگ‌تر از آغاز آن باشد.")
+            if category:
+                cleaned["selected_numbers"] = list(range(start or 0, (end or 0) + 1))
+        elif mode == self.EXPLICIT and category:
+            tokens = [
+                token.strip()
+                for token in re.split(r"[,\n\s]+", cleaned.get("customer_numbers", ""))
+                if token.strip()
+            ]
+            if not tokens:
+                self.add_error("customer_numbers", "حداقل یک شماره وارد کنید.")
+            else:
+                prefix = CUSTOMER_NUMBER_PREFIXES[category]
+                parsed = []
+                invalid = []
+                for token in tokens:
+                    match = re.fullmatch(r"([A-Z]?)(\d{1,4})", token)
+                    if not match or match.group(1) != prefix:
+                        invalid.append(token)
+                    else:
+                        number = int(match.group(2))
+                        canonical = f"{prefix}{number:02d}" if prefix else str(number)
+                        if token != canonical:
+                            invalid.append(token)
+                        else:
+                            parsed.append(number)
+                if invalid:
+                    self.add_error(
+                        "customer_numbers",
+                        "شماره‌ها با دستهٔ انتخاب‌شده هم‌خوان نیستند: " + ", ".join(invalid),
+                    )
+                else:
+                    cleaned["selected_numbers"] = list(dict.fromkeys(parsed))
+        return cleaned

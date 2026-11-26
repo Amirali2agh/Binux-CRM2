@@ -3,7 +3,7 @@
 {% block content %}
 <section class="page-heading" aria-labelledby="page-title">
   <div><h1 id="page-title">{{ page.title }}</h1><p class="page-lead">{{ page.description }}</p></div>
-  {% if request.user|has_crm_role:'CRM Manager' %}{% if current_page == 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_create' %}">ثبت مشتری</a>{% else %}<a class="primary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>{% endif %}{% elif current_page != 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>{% endif %}
+  {% if request.user|has_crm_role:'CRM Manager' %}{% if current_page == 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_create' %}">ثبت مشتری</a><a class="secondary-action" href="{% url 'crm:customer_assignment' %}">ارجاع مشتریان</a>{% else %}<a class="primary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>{% endif %}{% elif current_page != 'customer_list' %}<a class="primary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>{% endif %}
 </section>
 {% if current_page == 'customer_list' %}
 <nav class="customer-filter-tabs" aria-label="دسته‌بندی مشتریان">
