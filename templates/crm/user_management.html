@@ -1,0 +1,46 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+  <div>
+    <h1 id="page-title">افزودن کاربر</h1>
+    <p class="page-lead">ساخت حساب تیم و مدیریت نقش و دسترسی حساب‌های موجود.</p>
+  </div>
+</section>
+{% if messages %}<div class="form-success" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<section class="display-surface customer-form-surface" aria-labelledby="create-user-title">
+  <h2 id="create-user-title">ایجاد حساب جدید</h2>
+  <form method="post" novalidate>
+    {% csrf_token %}<input type="hidden" name="action" value="create">
+    {% if creation_form.non_field_errors %}<div class="form-errors" role="alert">{{ creation_form.non_field_errors }}</div>{% endif %}
+    <div class="customer-fields">
+      {% for field in creation_form %}<div class="field-row{% if field.errors %} field-invalid{% endif %}">
+        {{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% if field.errors %}<div class="field-errors" role="alert">{{ field.errors }}</div>{% endif %}
+      </div>{% endfor %}
+    </div>
+    <div class="form-actions"><button class="primary-action" type="submit">ایجاد کاربر</button></div>
+  </form>
+</section>
+<section class="display-surface customer-form-surface" aria-labelledby="existing-users-title">
+  <h2 id="existing-users-title">حساب‌های تیم</h2>
+  {% if user_entries %}
+    {% for entry in user_entries %}
+    <article class="user-management-entry" aria-label="{{ entry.user.username }}">
+      <h3>{{ entry.user.username }}</h3>
+      <p>نقش فعلی: {{ entry.role_label }} · {% if entry.user.is_active %}فعال{% else %}غیرفعال{% endif %}</p>
+      <form method="post" novalidate>
+        {% csrf_token %}<input type="hidden" name="action" value="update">
+        {% if entry.form.non_field_errors %}<div class="form-errors" role="alert">{{ entry.form.non_field_errors }}</div>{% endif %}
+        <div class="customer-fields">
+          {% for field in entry.form %}{% if field.name != 'user_id' %}<div class="field-row{% if field.errors %} field-invalid{% endif %}">
+            {{ field.label_tag }}{{ field }}{% if field.errors %}<div class="field-errors" role="alert">{{ field.errors }}</div>{% endif %}
+          </div>{% else %}{{ field }}{% endif %}{% endfor %}
+        </div>
+        <div class="form-actions"><button class="primary-action" type="submit">ذخیره تغییرات</button></div>
+      </form>
+    </article>
+    {% endfor %}
+  {% else %}
+    <p>حسابی برای نمایش وجود ندارد.</p>
+  {% endif %}
+</section>
+{% endblock %}

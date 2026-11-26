@@ -91,6 +91,24 @@ class Customer(models.Model):
         ]
 
     def clean(self):
+        assignee_model = self._meta.get_field("assignee").remote_field.model
+        assignee_is_active = bool(
+            self.assignee_id
+            and assignee_model.objects.filter(
+                pk=self.assignee_id, is_active=True
+            ).exists()
+        )
+        if self.assignee_id and not assignee_is_active:
+            existing_assignment = (
+                self.pk
+                and type(self).objects.filter(
+                    pk=self.pk, assignee_id=self.assignee_id
+                ).exists()
+            )
+            if not existing_assignment:
+                raise ValidationError(
+                    {"assignee": "کاربر غیرفعال نمی‌تواند مسئول جدید مشتری باشد"}
+                )
         if self.status == self.Status.SENT:
             if not self.assignee_id:
                 raise ValidationError(

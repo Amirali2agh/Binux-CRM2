@@ -160,6 +160,33 @@ async def main():
         assert await page.locator("html").get_attribute("data-theme") == "dark"
         assert await page.locator(".sidebar-foot [data-theme-toggle]").get_attribute("aria-checked") == "true"
 
+        response = await page.goto(f"{BASE_URL}/internal/settings/users/")
+        assert response and response.status == 200
+        assert await page.get_by_role("heading", name="افزودن کاربر").count() == 1
+        assert await page.get_by_role("heading", name="ایجاد حساب جدید").count() == 1
+        assert await page.get_by_label("نام کاربری").is_visible()
+        assert await page.get_by_label("گذرواژهٔ اولیه").is_visible()
+        assert await page.get_by_label("نقش").is_visible()
+        assert (
+            await page.locator(".user-management-entry")
+            .filter(has_text="calendar-ci")
+            .count()
+            == 1
+        )
+        checkbox_width = await page.get_by_label("حساب فعال باشد").evaluate(
+            "el => getComputedStyle(el).width"
+        )
+        assert checkbox_width == "20px", f"User activation checkbox width is {checkbox_width}"
+        for width in (1440, 390, 320):
+            await page.set_viewport_size({"width": width, "height": 1000})
+            dimensions = await page.evaluate(
+                "({viewport: document.documentElement.clientWidth, "
+                "document: document.documentElement.scrollWidth})"
+            )
+            assert dimensions["document"] <= dimensions["viewport"], (
+                f"User-management page overflows at {width}px: {dimensions}"
+            )
+
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
         print("Browser calendar/theme check passed: accessible sidebar on/off switch, "
               "default, localStorage persistence across routes/reload, placement at "

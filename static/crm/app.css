@@ -833,10 +833,15 @@ html:not(.js-ready) .sidebar-collapse {
 .logout-form button, .login-link, .row-actions button, .row-actions a, .form-actions button, .secondary-action { border: 1px solid #d7e1ee; border-radius: 8px; background: #fff; color: #345a90; padding: 7px 11px; font-size: 12px; }
 .primary-action { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: #355c98; color: #fff; padding: 10px 16px; font-size: 12px; font-weight: 700; }
 .customer-form-surface form { padding: 24px; }
+.user-management-entry { padding: 18px 24px; border-top: 1px solid #e2e8f0; }
+.user-management-entry h3 { margin: 0; color: #243551; font-size: 15px; }
+.user-management-entry p { color: #536781; font-size: 12px; }
+.form-success { margin: 0 0 16px; padding: 12px 16px; border: 1px solid #b9dfc6; border-radius: 8px; background: #f0faf3; color: #245c37; }
 .customer-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 20px; }
 .field-row { display: grid; gap: 8px; min-width: 0; color: #35445a; font-size: 12px; }
 .field-row label { font-weight: 700; }
 .form-control, .login-form input { width: 100%; min-height: 42px; border: 1px solid #cfd9e7; border-radius: 8px; background: #fff; color: #202b41; padding: 9px 11px; font: inherit; }
+.form-control[type="checkbox"] { width: 20px; min-height: 20px; padding: 0; accent-color: #355c98; }
 textarea.form-control { min-height: 90px; resize: vertical; }
 .field-invalid .form-control, .form-control[aria-invalid="true"] { border: 2px solid #c62828; background: #fff8f8; }
 .field-errors, .form-errors { color: #a51c1c; font-size: 12px; }
@@ -973,8 +978,18 @@ html[data-theme="dark"] .customer-form-surface {
 }
 html[data-theme="dark"] .customer-form-surface .field-row,
 html[data-theme="dark"] .customer-form-surface .field-row label,
-html[data-theme="dark"] .customer-form-surface .field-row small {
+html[data-theme="dark"] .customer-form-surface .field-row small,
+html[data-theme="dark"] .user-management-entry h3,
+html[data-theme="dark"] .user-management-entry p {
   color: #fff;
+}
+html[data-theme="dark"] .user-management-entry {
+  border-color: #707070;
+}
+html[data-theme="dark"] .form-success {
+  border-color: #547d60;
+  background: #304a37;
+  color: #e8f7ec;
 }
 html[data-theme="dark"] .form-control,
 html[data-theme="dark"] .customer-filters input,
