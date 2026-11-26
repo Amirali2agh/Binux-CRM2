@@ -28,7 +28,7 @@ from django.views.decorators.http import (
 
 from .call_ingestion import IngestTemporarilyUnavailable
 from .catalog import PAGES, SECTIONS
-from .forms import CallOutcomeForm, CustomerForm
+from .forms import CallOutcomeForm, CustomerAssignmentForm, CustomerForm
 from .integrations.noghtefone.ingest import ingest_signed_body
 from .integrations.noghtefone.signatures import signature_is_valid
 from .forms import (
@@ -38,7 +38,7 @@ from .forms import (
     TeamUserUpdateForm,
 )
 from .jalali_calendar import build_month
-from .models import CallRecord, Customer
+from .models import CallRecord, Customer, CustomerAssignment
 from .roles import (
     customer_queryset_for_user,
     is_marketer,
@@ -332,6 +332,121 @@ def customer_list(request):
             "status_tabs": status_tabs,
         },
     )
+
+
+@login_required
+@manager_required
+@require_http_methods(["GET", "POST"])
+def customer_assignment(request):
+    form = CustomerAssignmentForm(request.POST or None)
+    outcomes = []
+    if request.method == "POST" and form.is_valid():
+        category = form.cleaned_data["category"]
+        prefix = {
+            Customer.Category.COMPANY: "C",
+            Customer.Category.MICRO_BUSINESS: "A",
+            Customer.Category.CRM: "M",
+            Customer.Category.ERP: "E",
+            Customer.Category.UNCATEGORIZED: "",
+        }[category]
+        requested_numbers = [
+            f"{prefix}{number:02d}" if prefix else str(number)
+            for number in form.cleaned_data["selected_numbers"]
+        ]
+        customer_queryset = Customer.objects.select_related("assignee")
+        if prefix:
+            customer_queryset = customer_queryset.filter(customer_number__startswith=prefix)
+        else:
+            customer_queryset = customer_queryset.filter(category=category)
+        customers = {
+            customer.customer_number: customer
+            for customer in customer_queryset
+        }
+        recipient = form.cleaned_data["assignee"]
+        for customer_number in requested_numbers:
+            customer = customers.get(customer_number)
+            if customer is None:
+                outcomes.append({"number": customer_number, "message": "این شماره مشتری پیدا نشد."})
+                continue
+            if customer.archived_at or customer.trashed_at or customer.status == Customer.Status.COMPLETED:
+                outcomes.append({"number": customer_number, "message": "این مشتری در فهرست فعال قابل ارجاع نیست."})
+                continue
+            if customer.assignee_id:
+                outcomes.append({
+                    "number": customer_number,
+                    "message": "این مشتری قبلاً ارجاع شده است.",
+                    "assignee": customer.assignee.get_username(),
+                })
+                continue
+            now = timezone.now()
+            with transaction.atomic():
+                changed = Customer.objects.filter(
+                    pk=customer.pk,
+                    assignee__isnull=True,
+                    archived_at__isnull=True,
+                    trashed_at__isnull=True,
+                ).exclude(status=Customer.Status.COMPLETED).update(
+                    assignee=recipient, updated_at=now
+                )
+                if changed:
+                    CustomerAssignment.objects.create(
+                        customer=customer,
+                        assigned_by=request.user,
+                        assignee=recipient,
+                        assigned_at=now,
+                    )
+            if changed:
+                outcomes.append({"number": customer_number, "message": "با موفقیت ارجاع شد."})
+            else:
+                customer.refresh_from_db()
+                outcomes.append({
+                    "number": customer_number,
+                    "message": "هم‌زمان تغییر کرده است؛ دوباره بررسی کنید.",
+                    "assignee": customer.assignee.get_username() if customer.assignee_id else "",
+                })
+    assignments = CustomerAssignment.objects.filter(
+        assigned_by=request.user
+    ).select_related("customer", "assignee")
+    section, _ = PAGES["customer_list"]
+    return render(request, "crm/customer_assignment.html", {
+        "sections": SECTIONS,
+        "section": section,
+        "page": {"title": "ارجاع مشتریان", "description": "ارجاع مشتری با شمارهٔ مشتری و مشاهدهٔ ارجاع‌های شما"},
+        "current_page": "customer_assignment",
+        "form": form,
+        "outcomes": outcomes,
+        "assignments": assignments,
+        "active_assignment_count": assignments.filter(reclaimed_at__isnull=True).count(),
+    })
+
+
+@login_required
+@manager_required
+@require_POST
+def customer_assignment_reclaim(request, assignment_pk):
+    assignment = get_object_or_404(
+        CustomerAssignment.objects.select_related("customer"),
+        pk=assignment_pk,
+        assigned_by=request.user,
+        reclaimed_at__isnull=True,
+    )
+    now = timezone.now()
+    with transaction.atomic():
+        changes = {"assignee": None, "updated_at": now}
+        if assignment.customer.status == Customer.Status.SENT:
+            changes.update(status=Customer.Status.FOLLOW_UP, status_changed_at=now)
+        changed = Customer.objects.filter(
+            pk=assignment.customer_id, assignee_id=assignment.assignee_id
+        ).update(**changes)
+        if changed:
+            CustomerAssignment.objects.filter(
+                pk=assignment.pk, reclaimed_at__isnull=True
+            ).update(reclaimed_by=request.user, reclaimed_at=now)
+    if changed:
+        messages.success(request, f"مشتری {assignment.customer.customer_number} پس گرفته شد.")
+    else:
+        messages.error(request, "این ارجاع تغییر کرده یا قبلاً پس گرفته شده است.")
+    return redirect("crm:customer_assignment")
 
 
 @login_required

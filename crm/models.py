@@ -328,3 +328,38 @@ class CallEvent(models.Model):
 
     def __str__(self):
         return f"{self.provider}:{self.delivery_key}"
+
+
+class CustomerAssignment(models.Model):
+    customer = models.ForeignKey(
+        Customer, related_name="assignment_history", on_delete=models.CASCADE
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="customer_assignments_made",
+        on_delete=models.PROTECT,
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="customer_assignment_history",
+        on_delete=models.PROTECT,
+    )
+    assigned_at = models.DateTimeField(default=timezone.now)
+    reclaimed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="customer_assignments_reclaimed",
+        blank=True,
+        null=True,
+        on_delete=models.PROTECT,
+    )
+    reclaimed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("-assigned_at", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("customer",),
+                condition=models.Q(reclaimed_at__isnull=True),
+                name="one_active_assignment_per_customer",
+            )
+        ]

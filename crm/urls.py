@@ -11,6 +11,12 @@ urlpatterns = [
     path("customers/", views.customer_list, name="customer_list"),
     path("customers/follow-ups/", views.customer_follow_ups, name="follow_ups"),
     path("customers/new/", views.customer_create, name="customer_create"),
+    path("customers/assign/", views.customer_assignment, name="customer_assignment"),
+    path(
+        "customers/assignments/<int:assignment_pk>/reclaim/",
+        views.customer_assignment_reclaim,
+        name="customer_assignment_reclaim",
+    ),
     path("customers/tasks/", views.customer_tasks, name="tasks"),
     path("customers/completed/", views.completed_customers, name="completed_customers"),
     path("customers/archive/", views.customer_archive, name="customer_archive"),

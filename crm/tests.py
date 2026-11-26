@@ -2176,3 +2176,180 @@ class ManagerUserManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.manager.refresh_from_db()
         self.assertTrue(self.manager.is_active)
+
+
+class CustomerAssignmentTests(TestCase):
+    def setUp(self):
+        self.manager = create_manager_user("assignment-manager")
+        self.recipient = get_user_model().objects.create_user(username="assignment-recipient")
+        self.client.force_login(self.manager)
+        self.url = reverse("crm:customer_assignment")
+
+    def post_selection(self, *, mode="range", category=Customer.Category.COMPANY,
+                       start=1, end=1, numbers="", assignee=None):
+        return self.client.post(self.url, {
+            "mode": mode,
+            "category": category,
+            "start_number": start,
+            "end_number": end,
+            "customer_numbers": numbers,
+            "assignee": (assignee or self.recipient).pk,
+        })
+
+    def test_manager_can_assign_category_scoped_inclusive_number_range(self):
+        first = Customer.objects.create(name="Range first", category=Customer.Category.COMPANY)
+        second = Customer.objects.create(name="Range second", category=Customer.Category.COMPANY)
+        same_suffix_other_category = Customer.objects.create(
+            name="Other category", category=Customer.Category.CRM
+        )
+
+        response = self.post_selection(start=1, end=2)
+
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        same_suffix_other_category.refresh_from_db()
+        self.assertEqual(first.assignee_id, self.recipient.pk)
+        self.assertEqual(second.assignee_id, self.recipient.pk)
+        self.assertIsNone(same_suffix_other_category.assignee_id)
+        self.assertEqual(first.assignment_history.get().assigned_by, self.manager)
+        self.assertContains(response, "C01")
+        self.assertContains(response, "C02")
+
+    def test_repeated_submission_does_not_create_duplicate_assignment(self):
+        customer = Customer.objects.create(name="Duplicate submission", category=Customer.Category.COMPANY)
+
+        self.post_selection()
+        response = self.post_selection()
+
+        customer.refresh_from_db()
+        self.assertEqual(customer.assignee_id, self.recipient.pk)
+        self.assertEqual(customer.assignment_history.count(), 1)
+        self.assertContains(response, "این مشتری قبلاً ارجاع شده")
+
+    def test_explicit_number_selection_and_missing_number_are_reported(self):
+        customer = Customer.objects.create(name="Explicit choice", category=Customer.Category.CRM)
+
+        response = self.post_selection(
+            mode="explicit", category=Customer.Category.CRM,
+            numbers="M01, M03", start="", end="",
+        )
+
+        customer.refresh_from_db()
+        self.assertEqual(customer.assignee_id, self.recipient.pk)
+        self.assertContains(response, "M01")
+        self.assertContains(response, "این شماره مشتری پیدا نشد")
+        self.assertContains(response, "M03")
+
+    def test_previously_assigned_customer_is_not_overwritten_and_current_assignee_is_shown(self):
+        current = get_user_model().objects.create_user(username="current-customer-owner")
+        customer = Customer.objects.create(
+            name="Already assigned", category=Customer.Category.COMPANY, assignee=current
+        )
+
+        response = self.post_selection()
+
+        customer.refresh_from_db()
+        self.assertEqual(customer.assignee_id, current.pk)
+        self.assertContains(response, "این مشتری قبلاً ارجاع شده")
+        self.assertContains(response, "current-customer-owner")
+        self.assertFalse(customer.assignment_history.exists())
+
+    def test_inactive_recipient_is_rejected_without_assignment(self):
+        inactive = get_user_model().objects.create_user(
+            username="inactive-recipient", is_active=False
+        )
+        customer = Customer.objects.create(name="Inactive recipient", category=Customer.Category.COMPANY)
+
+        response = self.post_selection(assignee=inactive)
+
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertIsNone(customer.assignee_id)
+        self.assertIn("assignee", response.context["form"].errors)
+
+    def test_active_django_admin_account_can_be_a_recipient(self):
+        administrator = get_user_model().objects.create_superuser(
+            username="assignment-admin", password="safe-test-password"
+        )
+        customer = Customer.objects.create(name="Admin recipient", category=Customer.Category.COMPANY)
+
+        response = self.post_selection(assignee=administrator)
+
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertEqual(customer.assignee_id, administrator.pk)
+
+    def test_invalid_category_prefix_does_not_mutate_any_customer(self):
+        customer = Customer.objects.create(name="Mismatched number", category=Customer.Category.CRM)
+
+        response = self.post_selection(
+            mode="explicit", category=Customer.Category.COMPANY,
+            numbers="M01", start="", end="",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertIsNone(customer.assignee_id)
+        self.assertContains(response, "با دستهٔ انتخاب‌شده هم‌خوان نیست")
+
+    def test_reclaim_keeps_history_and_releases_assignment(self):
+        customer = Customer.objects.create(name="Reclaim target", category=Customer.Category.COMPANY)
+        self.post_selection()
+        assignment = customer.assignment_history.get()
+
+        response = self.client.post(
+            reverse("crm:customer_assignment_reclaim", args=(assignment.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        customer.refresh_from_db()
+        assignment.refresh_from_db()
+        self.assertIsNone(customer.assignee_id)
+        self.assertEqual(assignment.assigned_by, self.manager)
+        self.assertEqual(assignment.reclaimed_by, self.manager)
+        self.assertIsNotNone(assignment.reclaimed_at)
+        self.assertContains(self.client.get(self.url), "پس‌گرفته‌شده")
+
+    def test_reclaiming_sent_customer_moves_it_to_follow_up(self):
+        customer = Customer.objects.create(name="Sent target", category=Customer.Category.COMPANY)
+        self.post_selection()
+        customer.refresh_from_db()
+        customer.status = Customer.Status.SENT
+        customer.save(update_fields=("status", "updated_at"))
+        assignment = customer.assignment_history.get()
+
+        self.client.post(reverse("crm:customer_assignment_reclaim", args=(assignment.pk,)))
+
+        customer.refresh_from_db()
+        self.assertIsNone(customer.assignee_id)
+        self.assertEqual(customer.status, Customer.Status.FOLLOW_UP)
+
+    def test_only_manager_can_view_or_submit_assignment_workflow(self):
+        marketer = get_user_model().objects.create_user(username="assignment-marketer")
+        marketer.groups.add(Group.objects.get_or_create(name="CRM Marketer")[0])
+        customer = Customer.objects.create(name="Permission target", category=Customer.Category.COMPANY)
+        self.client.force_login(marketer)
+
+        get_response = self.client.get(self.url)
+        post_response = self.post_selection()
+
+        self.assertEqual(get_response.status_code, 403)
+        self.assertEqual(post_response.status_code, 403)
+        customer.refresh_from_db()
+        self.assertIsNone(customer.assignee_id)
+
+    def test_reclaim_is_limited_to_assigning_manager(self):
+        customer = Customer.objects.create(name="Manager isolation", category=Customer.Category.COMPANY)
+        self.post_selection()
+        assignment = customer.assignment_history.get()
+        other_manager = create_manager_user("other-assignment-manager")
+        self.client.force_login(other_manager)
+
+        response = self.client.post(
+            reverse("crm:customer_assignment_reclaim", args=(assignment.pk,))
+        )
+
+        self.assertEqual(response.status_code, 404)
+        customer.refresh_from_db()
+        self.assertEqual(customer.assignee_id, self.recipient.pk)

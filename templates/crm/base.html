@@ -47,6 +47,7 @@
           {% for item in nav_section.pages %}
           <a href="{% url 'crm:'|add:item.name %}"{% if item.name == current_page %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>{{ item.title }}</span></a>
           {% if item.name == 'customer_list' and request.user|has_crm_role:'CRM Manager' %}<a href="{% url 'crm:customer_create' %}"{% if current_page == 'customer_create' %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>ثبت مشتری</span></a>{% endif %}
+          {% if item.name == 'customer_list' and request.user|has_crm_role:'CRM Manager' %}<a href="{% url 'crm:customer_assignment' %}"{% if current_page == 'customer_assignment' %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>ارجاع مشتریان</span></a>{% endif %}
           {% endfor %}
           {% if nav_section.slug == 'internal' and request.user|has_crm_role:'CRM Manager' %}<a href="{% url 'crm:user_management' %}"{% if current_page == 'user_management' %} aria-current="page"{% endif %}><span class="nav-dot" aria-hidden="true"></span><span>افزودن کاربر</span></a>{% endif %}
         </div>

@@ -1157,6 +1157,66 @@ html[data-theme="dark"] .jalali-calendar th:last-child {
   justify-content: center;
   padding: 8px 0;
 }
+
+.customer-assignment-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+.customer-assignment-form label,
+.assignment-range-fields label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 600;
+}
+.customer-assignment-form .form-control,
+.customer-assignment-form select,
+.customer-assignment-form input,
+.customer-assignment-form textarea {
+  width: 100%;
+  min-width: 0;
+}
+.assignment-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d9dce5;
+  border-radius: 10px;
+}
+.assignment-range-fields legend {
+  padding: 0 6px;
+  color: #49556d;
+}
+.customer-assignment-form small,
+.customer-assignment-form .errorlist {
+  font-size: 12px;
+}
+.customer-assignment-form .primary-action {
+  justify-self: start;
+}
+.assignment-outcomes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 40px 20px 20px;
+}
+.assignment-outcomes li {
+  overflow-wrap: anywhere;
+}
+.assignment-surface + .assignment-surface {
+  margin-top: 20px;
+}
+@media (max-width: 700px) {
+  .customer-assignment-form,
+  .assignment-range-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .theme-switch-thumb {
     transition: none;

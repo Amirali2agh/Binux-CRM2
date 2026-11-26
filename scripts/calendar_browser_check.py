@@ -187,10 +187,27 @@ async def main():
                 f"User-management page overflows at {width}px: {dimensions}"
             )
 
+        response = await page.goto(f"{BASE_URL}/customers/assign/")
+        assert response and response.status == 200
+        assert await page.get_by_role("heading", name="ارجاع مشتریان").count() == 1
+        assert await page.get_by_label("روش انتخاب مشتری").is_visible()
+        assert await page.get_by_label("دسته مشتری").is_visible()
+        assert await page.get_by_label("ارجاع به کاربر فعال").is_visible()
+        assert await page.get_by_role("heading", name="مشتریانی که شما ارجاع داده‌اید").count() == 1
+        assert await page.get_by_role("link", name="ارجاع مشتریان").count() == 1
+        for width in (1440, 390, 320):
+            await page.set_viewport_size({"width": width, "height": 1000})
+            dimensions = await page.evaluate(
+                "({viewport: document.documentElement.clientWidth, "
+                "document: document.documentElement.scrollWidth})"
+            )
+            assert dimensions["document"] <= dimensions["viewport"], (
+                f"Customer-assignment page overflows at {width}px: {dimensions}"
+            )
+
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
-        print("Browser calendar/theme check passed: accessible sidebar on/off switch, "
-              "default, localStorage persistence across routes/reload, placement at "
-              "1440/390/320px, no overflow/page errors.")
+        print("Browser checks passed: calendar/theme, user management, and customer "
+              "assignment page at 1440/390/320px; no overflow/page errors.")
         await browser.close()
 
 

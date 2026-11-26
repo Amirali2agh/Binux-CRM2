@@ -1,0 +1,43 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+  <div><h1 id="page-title">{{ page.title }}</h1><p class="page-lead">{{ page.description }}</p></div>
+  <a class="secondary-action" href="{% url 'crm:customer_list' %}">بازگشت به لیست مشتریان</a>
+</section>
+{% if messages %}<div class="form-success" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<section class="display-surface assignment-surface" aria-labelledby="assignment-form-title">
+  <div class="surface-heading"><h2 id="assignment-form-title">ارجاع مشتری</h2></div>
+  <form method="post" class="customer-assignment-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <label>{{ form.mode.label }}{{ form.mode }}{{ form.mode.errors }}</label>
+    <label>{{ form.category.label }}{{ form.category }}{{ form.category.errors }}</label>
+    <fieldset class="assignment-range-fields"><legend>برای بازه، شماره‌های آغاز و پایان را وارد کنید</legend>
+      <label>{{ form.start_number.label }}{{ form.start_number }}{{ form.start_number.errors }}</label>
+      <label>{{ form.end_number.label }}{{ form.end_number }}{{ form.end_number.errors }}</label>
+    </fieldset>
+    <label>{{ form.customer_numbers.label }}{{ form.customer_numbers }}<small>{{ form.customer_numbers.help_text }}</small>{{ form.customer_numbers.errors }}</label>
+    <label>{{ form.assignee.label }}{{ form.assignee }}{{ form.assignee.errors }}</label>
+    <button class="primary-action" type="submit">بررسی و ارجاع</button>
+  </form>
+</section>
+{% if outcomes %}
+<section class="display-surface assignment-surface" aria-labelledby="assignment-results-title" aria-live="polite">
+  <div class="surface-heading"><h2 id="assignment-results-title">نتیجهٔ بررسی</h2><span>{{ outcomes|length }} شماره</span></div>
+  <ul class="assignment-outcomes">{% for outcome in outcomes %}<li><bdi dir="ltr">{{ outcome.number }}</bdi> — {{ outcome.message }}{% if outcome.assignee %} (مسئول فعلی: {{ outcome.assignee }}){% endif %}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section class="display-surface assignment-surface" aria-labelledby="my-assignments-title">
+  <div class="surface-heading"><h2 id="my-assignments-title">مشتریانی که شما ارجاع داده‌اید</h2><span>{{ active_assignment_count }} مورد فعال</span></div>
+  <div class="table-wrap">
+    <table class="customer-table"><thead><tr><th scope="col">شماره مشتری</th><th scope="col">نام مشتری</th><th scope="col">ارجاع به</th><th scope="col">عملیات</th></tr></thead>
+      <tbody>{% for assignment in assignments %}<tr>
+        <td><bdi dir="ltr">{{ assignment.customer.customer_number }}</bdi></td>
+        <td><a href="{% url 'crm:customer_detail' assignment.customer_id %}">{{ assignment.customer.name|default:'بدون نام' }}</a></td>
+        <td>{{ assignment.assignee.get_username }}{% if assignment.reclaimed_at %}<small>پس‌گرفته‌شده در {{ assignment.reclaimed_at|date:'Y-m-d H:i' }} توسط {{ assignment.reclaimed_by.get_username }}</small>{% else %}<small>ارجاع در {{ assignment.assigned_at|date:'Y-m-d H:i' }}</small>{% endif %}</td>
+        <td>{% if not assignment.reclaimed_at %}<form method="post" action="{% url 'crm:customer_assignment_reclaim' assignment.pk %}">{% csrf_token %}<button type="submit">پس‌گرفتن</button></form>{% else %}—{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="4">هنوز مشتری فعالی را ارجاع نداده‌اید.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
