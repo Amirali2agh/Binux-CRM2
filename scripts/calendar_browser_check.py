@@ -236,6 +236,15 @@ async def main():
                 "({viewport: document.documentElement.clientWidth, "
                 "document: document.documentElement.scrollWidth})"
             )
+            if dimensions["document"] > dimensions["viewport"]:
+                dimensions["offenders"] = await page.evaluate(
+                    """() => [...document.querySelectorAll('body *')]
+                      .map(el => ({tag: el.tagName, cls: String(el.className).slice(0, 100),
+                        right: Math.round(el.getBoundingClientRect().right),
+                        width: Math.round(el.getBoundingClientRect().width)}))
+                      .filter(el => el.right > document.documentElement.clientWidth)
+                      .slice(-12)"""
+                )
             assert dimensions["document"] <= dimensions["viewport"], (
                 f"Manager dashboard overflows at {width}px: {dimensions}"
             )
