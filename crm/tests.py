@@ -2266,7 +2266,7 @@ class CustomerAssignmentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         customer.refresh_from_db()
         self.assertIsNone(customer.assignee_id)
-        self.assertContains(response, "Select a valid choice", status_code=200)
+        self.assertIn("assignee", response.context["form"].errors)
 
     def test_active_django_admin_account_can_be_a_recipient(self):
         administrator = get_user_model().objects.create_superuser(
