@@ -61,6 +61,14 @@ NOGHTE_API_KEY_FILE=/secure/path/to/api-key .venv/bin/python manage.py sync_nogh
 
 The command queries outbound history for every normalized number found on the three phone fields of exactly one non-archived, non-trashed customer. The same subscriber stored in two slots of one customer is queried once. It sends the stored phone string for that slot as the `number` query parameter. Rows whose number does not match, inbound rows, and rows with no status are skipped. An unrecognized status is imported as `unknown` and does not change the customer. Provider call ids keep retries idempotent. Output is aggregate counts and does not include phone numbers or the API key.
 
+Each command attempt is recorded in `CallSyncRun` as running, succeeded, or failed, with start/finish timestamps and the number of newly imported records. No credentials, numbers, or provider error text are stored. A failed attempt can have imported some calls before it failed; reruns remain safe because provider call IDs are unique. The manager call dashboard displays the latest run state so a partial or stale snapshot is not presented as live provider data.
+
+## Manager call dashboard
+
+The manager-only `/management/dashboard/` page reads stored `CallRecord` rows with a provider `external_id`; it never calls Noghtefone from a page request. By default it includes calls from the last 30 days based on recorded call time. `answered` is counted as answered, `call_again` as unanswered, and `unknown` remains a separate category rather than being guessed. Filters are by call outcome and by current assigned Marketer; the two owner-requested staff/person selectors are intentionally equivalent. Calls are attributed to the customer's current assignee, not the person who made the call. Calls without a current Marketer assignment remain in an explicit unassigned bucket.
+
+The dashboard reports the latest webhook delivery and any recorded failed webhook events separately from the latest operator-run API sync. If there is no sync run, a run is in progress, or the latest run failed, the page says the records may be incomplete and does not call the results current. A call outcome chart and a current-assignee chart each have a text table equivalent for screen readers and no-JavaScript use.
+
 The documented tests mock HTTP. Do not point this command at a live CRM database as part of a feature check, and do not call the real Noghtefone API from tests.
 
 ## Provisional payload fields

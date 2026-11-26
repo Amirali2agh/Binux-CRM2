@@ -717,6 +717,8 @@ html:not(.js-ready) .sidebar-collapse {
   .contract-preview {
     padding: 8px 20px 20px;
   }
+  .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-charts { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   html:not(.js-ready) .sidebar {
@@ -873,6 +875,40 @@ textarea.form-control { min-height: 90px; resize: vertical; }
 .calendar-day--holiday time { color: #795513; }
 .calendar-holiday-name { display: block; margin-top: 3px; color: #795513; font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
 
+.dashboard-source,
+.dashboard-chart-card,
+.dashboard-summary article {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 18px;
+}
+.dashboard-source { margin-bottom: 18px; color: #536781; font-size: 13px; line-height: 1.9; }
+.dashboard-source h2,
+.dashboard-chart-card h2,
+.dashboard-summary h2 { margin: 0 0 10px; font-size: 15px; color: #263e65; }
+.dashboard-source p { margin: 6px 0 0; }
+.dashboard-warning { color: #9b3e33; font-weight: 700; }
+.dashboard-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 18px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.dashboard-filters label { display: grid; flex: 1 1 180px; gap: 5px; color: #536781; font-size: 12px; }
+.dashboard-filters select,
+.dashboard-filters button,
+.dashboard-filters a { min-height: 40px; padding: 7px 10px; border: 1px solid #d5deea; border-radius: 7px; background: #fff; color: #202b41; font: inherit; }
+.dashboard-filters button { background: #355c98; border-color: #355c98; color: #fff; cursor: pointer; }
+.dashboard-filters a { display: inline-flex; align-items: center; color: #355c98; }
+.dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.dashboard-summary article { min-width: 0; }
+.dashboard-summary h2 { color: #657389; font-size: 12px; }
+.dashboard-summary strong { color: #1b2b46; font-size: 28px; font-variant-numeric: tabular-nums; }
+.dashboard-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dashboard-chart-card { min-width: 0; }
+.dashboard-pie { width: 170px; height: 170px; margin: 14px auto 20px; border-radius: 50%; border: 1px solid #d7e1ee; }
+.dashboard-chart-table { width: 100%; border-collapse: collapse; }
+.dashboard-chart-table caption { padding: 0 0 8px; text-align: right; color: #657389; font-size: 12px; }
+.dashboard-chart-table th,
+.dashboard-chart-table td { padding: 9px; border-bottom: 1px solid #e5eaf2; text-align: right; }
+.dashboard-chart-table th { color: #536781; font-size: 12px; }
+
 html[data-theme="dark"] {
   color-scheme: dark;
   color: #fff;
@@ -882,6 +918,10 @@ html[data-theme="dark"] .workspace,
 html[data-theme="dark"] .topbar,
 html[data-theme="dark"] .display-surface,
 html[data-theme="dark"] .customer-filters,
+html[data-theme="dark"] .dashboard-source,
+html[data-theme="dark"] .dashboard-filters,
+html[data-theme="dark"] .dashboard-chart-card,
+html[data-theme="dark"] .dashboard-summary article,
 html[data-theme="dark"] .calendar-panel,
 html[data-theme="dark"] .contract-document,
 html[data-theme="dark"] .calendar-empty {
@@ -897,6 +937,13 @@ html[data-theme="dark"] .breadcrumbs,
 html[data-theme="dark"] .breadcrumbs span:last-child,
 html[data-theme="dark"] .page-heading h1,
 html[data-theme="dark"] .page-lead,
+html[data-theme="dark"] .dashboard-source,
+html[data-theme="dark"] .dashboard-source h2,
+html[data-theme="dark"] .dashboard-chart-card h2,
+html[data-theme="dark"] .dashboard-summary h2,
+html[data-theme="dark"] .dashboard-summary strong,
+html[data-theme="dark"] .dashboard-chart-table caption,
+html[data-theme="dark"] .dashboard-warning,
 html[data-theme="dark"] .surface-heading h2,
 html[data-theme="dark"] .surface-heading span,
 html[data-theme="dark"] th,
@@ -916,6 +963,7 @@ html[data-theme="dark"] .next-phase,
 html[data-theme="dark"] .customer-details dt,
 html[data-theme="dark"] .customer-details dd,
 html[data-theme="dark"] .customer-filters label,
+html[data-theme="dark"] .dashboard-filters label,
 html[data-theme="dark"] .customer-table small,
 html[data-theme="dark"] .calendar-month-title,
 html[data-theme="dark"] .calendar-day time,
@@ -972,12 +1020,14 @@ html[data-theme="dark"] .form-success {
 html[data-theme="dark"] .form-control,
 html[data-theme="dark"] .customer-filters input,
 html[data-theme="dark"] .customer-filters select,
+html[data-theme="dark"] .dashboard-filters select,
 html[data-theme="dark"] .logout-form button,
 html[data-theme="dark"] .login-link,
 html[data-theme="dark"] .row-actions button,
 html[data-theme="dark"] .row-actions a,
 html[data-theme="dark"] .form-actions .secondary-action,
 html[data-theme="dark"] .customer-filters a,
+html[data-theme="dark"] .dashboard-filters a,
 html[data-theme="dark"] .calendar-nav-link {
   border-color: #777;
   background: #4a4a4a;
@@ -986,6 +1036,7 @@ html[data-theme="dark"] .calendar-nav-link {
 html[data-theme="dark"] .form-control:focus-visible,
 html[data-theme="dark"] .customer-filters input:focus-visible,
 html[data-theme="dark"] .customer-filters select:focus-visible,
+html[data-theme="dark"] .dashboard-filters select:focus-visible,
 html[data-theme="dark"] a:focus-visible,
 html[data-theme="dark"] button:focus-visible {
   outline: 3px solid #a8c7ff;
@@ -1002,6 +1053,7 @@ html[data-theme="dark"] .form-errors {
   color: #ffb3b3;
 }
 html[data-theme="dark"] .customer-filters button,
+html[data-theme="dark"] .dashboard-filters button,
 html[data-theme="dark"] .primary-action {
   border-color: #8baee6;
   background: #355c98;

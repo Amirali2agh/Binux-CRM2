@@ -14,7 +14,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.views import LoginView
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render, reverse
@@ -38,8 +38,9 @@ from .forms import (
     TeamUserUpdateForm,
 )
 from .jalali_calendar import build_month
-from .models import CallRecord, Customer, CustomerAssignment
+from .models import CallEvent, CallRecord, CallSyncRun, Customer, CustomerAssignment
 from .roles import (
+    MARKETER_GROUP,
     customer_queryset_for_user,
     is_marketer,
     manager_required,
@@ -189,6 +190,130 @@ def home(request):
         "crm:customer_list" if is_marketer(request.user) else "crm:office_inventory"
     )
     return redirect(destination)
+
+
+def _pie_style(segments):
+    total = sum(segment["count"] for segment in segments)
+    if not total:
+        return ""
+    colors = ("#3977c3", "#df8b35", "#8b6bb2", "#4f9b79", "#c65c66")
+    stops = []
+    start = 0.0
+    for index, segment in enumerate(segments):
+        end = start + segment["count"] * 100 / total
+        stops.append(f"{colors[index % len(colors)]} {start:.2f}% {end:.2f}%")
+        start = end
+    return "background: conic-gradient(" + ", ".join(stops) + ")"
+
+
+@login_required
+@manager_required
+@require_safe
+def manager_call_dashboard(request):
+    """Summarize persisted provider call records without querying the provider."""
+    marketers = tuple(
+        get_user_model().objects.filter(groups__name=MARKETER_GROUP)
+        .order_by("username", "pk")
+        .distinct()
+    )
+    marketer_ids = {str(user.pk) for user in marketers}
+    calls = CallRecord.objects.select_related("customer__assignee").filter(
+        external_id__isnull=False,
+        called_at__gte=timezone.now() - timedelta(days=30),
+    ).exclude(external_id="")
+
+    staff_value = request.GET.get("staff", "")
+    person_value = request.GET.get("person", "")
+    valid_values = marketer_ids | {"unassigned"}
+
+    def apply_assignee_filter(queryset, value):
+        if value == "unassigned":
+            return queryset.filter(
+                Q(customer__assignee__isnull=True)
+                | ~Q(customer__assignee__groups__name=MARKETER_GROUP)
+            )
+        if value in marketer_ids:
+            return queryset.filter(customer__assignee_id=int(value))
+        return queryset
+
+    if staff_value in valid_values:
+        calls = apply_assignee_filter(calls, staff_value)
+    if person_value in valid_values:
+        calls = apply_assignee_filter(calls, person_value)
+
+    outcome_value = request.GET.get("status", "")
+    outcome_filters = {
+        CallRecord.Outcome.ANSWERED: CallRecord.Outcome.ANSWERED,
+        CallRecord.Outcome.CALL_AGAIN: CallRecord.Outcome.CALL_AGAIN,
+        CallRecord.Outcome.UNKNOWN: CallRecord.Outcome.UNKNOWN,
+    }
+    if outcome_value in outcome_filters:
+        calls = calls.filter(outcome=outcome_filters[outcome_value])
+
+    totals = {
+        "total": calls.count(),
+        "answered": calls.filter(outcome=CallRecord.Outcome.ANSWERED).count(),
+        "unanswered": calls.filter(outcome=CallRecord.Outcome.CALL_AGAIN).count(),
+        "unknown": calls.filter(outcome=CallRecord.Outcome.UNKNOWN).count(),
+    }
+    outcome_segments = [
+        {"label": "پاسخ داده‌شده", "count": totals["answered"]},
+        {"label": "بی‌پاسخ / تماس مجدد", "count": totals["unanswered"]},
+        {"label": "نامشخص / پشتیبانی‌نشده", "count": totals["unknown"]},
+    ]
+    assigned_call_rows = calls.values(
+        "customer__assignee_id", "customer__assignee__username"
+    ).annotate(count=Count("pk"))
+    assignee_counts = {str(row["customer__assignee_id"]): row["count"] for row in assigned_call_rows}
+    assigned_segments = [
+        {"label": user.get_username(), "count": assignee_counts.get(str(user.pk), 0)}
+        for user in marketers
+        if assignee_counts.get(str(user.pk), 0)
+    ]
+    unassigned_count = sum(
+        row["count"]
+        for row in assigned_call_rows
+        if row["customer__assignee_id"] is None
+        or str(row["customer__assignee_id"]) not in marketer_ids
+    )
+    if unassigned_count:
+        assigned_segments.append(
+            {"label": "بدون بازاریاب مسئول فعلی", "count": unassigned_count}
+        )
+
+    latest_webhook = CallEvent.objects.order_by("-received_at", "-pk").first()
+    failed_webhook_count = CallEvent.objects.filter(
+        disposition=CallEvent.Disposition.FAILED
+    ).count()
+    latest_sync_run = CallSyncRun.objects.order_by("-started_at", "-pk").first()
+    manager_section = {"title": "مدیریت", "slug": "management", "icon": "people"}
+    dashboard_page = {"title": "داشبورد تماس‌ها"}
+    return render(
+        request,
+        "crm/manager_dashboard.html",
+        {
+            "sections": SECTIONS,
+            "section": manager_section,
+            "page": dashboard_page,
+            "current_page": "manager_dashboard",
+            "marketers": marketers,
+            "staff_value": staff_value if staff_value in valid_values else "",
+            "person_value": person_value if person_value in valid_values else "",
+            "outcome_value": outcome_value if outcome_value in outcome_filters else "",
+            "outcome_choices": CallRecord.Outcome.choices,
+            "totals": totals,
+            "outcome_segments": outcome_segments,
+            "outcome_pie_style": _pie_style(outcome_segments),
+            "assigned_segments": assigned_segments,
+            "assignee_pie_style": _pie_style(assigned_segments),
+            "latest_webhook": latest_webhook,
+            "failed_webhook_count": failed_webhook_count,
+            "latest_sync_run": latest_sync_run,
+            "has_provider_calls": CallRecord.objects.filter(
+                external_id__isnull=False
+            ).exclude(external_id="").exists(),
+        },
+    )
 
 
 @login_required

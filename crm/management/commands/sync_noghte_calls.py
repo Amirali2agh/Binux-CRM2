@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_datetime
 
 from crm.call_ingestion import apply_customer_status, should_replace_outcome
 from crm.integrations.noghte import NoghteAPIClient, NoghteAPIError, map_call_status
-from crm.models import CallRecord, Customer
+from crm.models import CallRecord, CallSyncRun, Customer
 from crm.phones import phone_match_key, unique_phone_keys
 
 
@@ -29,9 +29,12 @@ class Command(BaseCommand):
         except (TypeError, ValueError):
             raise CommandError("--since must be a valid ISO date in YYYY-MM-DD format.") from None
 
+        run = CallSyncRun.objects.create()
+        stats = defaultdict(int)
         try:
             client = NoghteAPIClient()
         except NoghteAPIError:
+            self._finish_run(run, CallSyncRun.Status.FAILED, stats)
             raise CommandError(
                 "Phone service credentials are unavailable; check the secure key-file setting."
             ) from None
@@ -55,7 +58,6 @@ class Command(BaseCommand):
                     customers_by_phone[match_key].append(customer)
                     query_values.setdefault(match_key, raw)
 
-        stats = defaultdict(int)
         for match_key in sorted(customers_by_phone):
             matches = customers_by_phone[match_key]
             if len(matches) != 1 or phone_record_counts[match_key] != 1:
@@ -66,6 +68,7 @@ class Command(BaseCommand):
             try:
                 provider_calls = list(client.iter_calls(number=phone, since=since))
             except NoghteAPIError:
+                self._finish_run(run, CallSyncRun.Status.FAILED, stats)
                 raise CommandError(
                     "Phone service sync failed; check the secure key configuration and retry "
                     "with the same --since date."
@@ -146,6 +149,14 @@ class Command(BaseCommand):
                 )}
             )
         )
+        self._finish_run(run, CallSyncRun.Status.SUCCEEDED, stats)
+
+    @staticmethod
+    def _finish_run(run, status, stats):
+        run.status = status
+        run.finished_at = timezone.now()
+        run.imported_count = stats["imported"]
+        run.save(update_fields=("status", "finished_at", "imported_count"))
 
     @staticmethod
     def _parse_call(provider_call, phone):

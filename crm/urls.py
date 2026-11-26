@@ -6,6 +6,7 @@ from .catalog import SECTIONS
 app_name = "crm"
 urlpatterns = [
     path("", views.home, name="home"),
+    path("management/dashboard/", views.manager_call_dashboard, name="manager_dashboard"),
     path("internal/calendar/", views.calendar_view, name="calendar"),
     path("internal/settings/users/", views.user_management, name="user_management"),
     path("customers/", views.customer_list, name="customer_list"),

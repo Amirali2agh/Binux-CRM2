@@ -270,6 +270,23 @@ class CallRecord(models.Model):
         indexes = [models.Index(fields=("customer", "-called_at"))]
 
 
+class CallSyncRun(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "در حال اجرا"
+        SUCCEEDED = "succeeded", "موفق"
+        FAILED = "failed", "ناموفق"
+
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.RUNNING
+    )
+    started_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    imported_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("-started_at", "-pk")
+
+
 class CallEvent(models.Model):
     """One authenticated provider delivery, stored before customer association."""
 
