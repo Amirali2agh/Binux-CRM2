@@ -903,7 +903,9 @@ textarea.form-control { min-height: 90px; resize: vertical; }
 .dashboard-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .dashboard-chart-card { min-width: 0; }
 .dashboard-pie { width: 170px; height: 170px; margin: 14px auto 20px; border-radius: 50%; border: 1px solid #d7e1ee; }
-.dashboard-chart-table { width: 100%; border-collapse: collapse; }
+.dashboard-chart-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.dashboard-chart-table th,
+.dashboard-chart-table td { overflow-wrap: anywhere; }
 .dashboard-chart-table caption { padding: 0 0 8px; text-align: right; color: #657389; font-size: 12px; }
 .dashboard-chart-table th,
 .dashboard-chart-table td { padding: 9px; border-bottom: 1px solid #e5eaf2; text-align: right; }
