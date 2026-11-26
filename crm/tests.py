@@ -1816,3 +1816,220 @@ class NoghteCallSyncCommandTests(TestCase):
         self.assertNotIn(first_customer.phone, output.getvalue())
         self.assertNotIn(second_customer.phone, output.getvalue())
         self.assertNotIn("provider-call-before-failure", output.getvalue())
+
+
+class ManagerUserManagementTests(TestCase):
+    def setUp(self):
+        self.manager = create_manager_user("user-management-manager")
+        self.client.force_login(self.manager)
+
+    def test_manager_can_open_user_management_page(self):
+        response = self.client.get(reverse("crm:user_management"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "افزودن کاربر")
+        self.assertContains(response, "user-management-manager")
+
+    def test_manager_can_create_account_with_explicit_role_and_hashed_password(self):
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "create",
+                "username": "new-marketer",
+                "password1": "Good-Example-Password-42!",
+                "password2": "Good-Example-Password-42!",
+                "role": "CRM Marketer",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        created = get_user_model().objects.get(username="new-marketer")
+        self.assertTrue(created.check_password("Good-Example-Password-42!"))
+        self.assertEqual(
+            set(created.groups.values_list("name", flat=True)), {"CRM Marketer"}
+        )
+        self.assertNotIn("Good-Example-Password-42!", response.content.decode())
+
+    def test_manager_can_create_a_manager_account(self):
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "create",
+                "username": "new-manager",
+                "password1": "Another-Safe-Password-52!",
+                "password2": "Another-Safe-Password-52!",
+                "role": "CRM Manager",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        created = get_user_model().objects.get(username="new-manager")
+        self.assertEqual(
+            set(created.groups.values_list("name", flat=True)), {"CRM Manager"}
+        )
+
+    def test_invalid_creation_does_not_create_account(self):
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "create",
+                "username": "new-marketer",
+                "password1": "weak",
+                "password2": "different",
+                "role": "CRM Marketer",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(get_user_model().objects.filter(username="new-marketer").exists())
+
+    def test_manager_can_change_role_and_deactivate_user(self):
+        user = get_user_model().objects.create_user(username="role-change-user")
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "update",
+                "user_id": user.pk,
+                "role": "CRM Marketer",
+                "is_active": "",
+                "confirm": "yes",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertEqual(set(user.groups.values_list("name", flat=True)), {"CRM Marketer"})
+
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "update",
+                "user_id": user.pk,
+                "role": "CRM Marketer",
+                "is_active": "on",
+                "confirm": "yes",
+            },
+            follow=True,
+        )
+        self.assertContains(response, "تغییرات حساب با موفقیت ذخیره شد.")
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+
+    def test_user_changes_require_confirmation(self):
+        user = get_user_model().objects.create_user(username="unconfirmed-user")
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "update",
+                "user_id": user.pk,
+                "role": "CRM Marketer",
+                "is_active": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(user.groups.filter(name="CRM Marketer").exists())
+
+    def test_marketer_cannot_open_or_submit_user_management(self):
+        marketer = get_user_model().objects.create_user(
+            username="user-management-marketer", password="safe-test-password"
+        )
+        marketer.groups.add(Group.objects.get_or_create(name="CRM Marketer")[0])
+        self.client.force_login(marketer)
+
+        get_response = self.client.get(reverse("crm:user_management"))
+        post_response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "create",
+                "username": "forbidden-user",
+                "password1": "Good-Example-Password-42!",
+                "password2": "Good-Example-Password-42!",
+                "role": "CRM Manager",
+            },
+        )
+
+        self.assertEqual(get_response.status_code, 403)
+        self.assertEqual(post_response.status_code, 403)
+        self.assertFalse(get_user_model().objects.filter(username="forbidden-user").exists())
+
+    def test_inactive_user_cannot_authenticate(self):
+        user = get_user_model().objects.create_user(
+            username="deactivated-user", password="safe-test-password", is_active=False
+        )
+
+        self.assertFalse(
+            self.client.login(username=user.username, password="safe-test-password")
+        )
+
+    def test_inactive_users_cannot_receive_new_customer_assignments(self):
+        inactive_user = get_user_model().objects.create_user(
+            username="inactive-assignee", is_active=False
+        )
+        form = CustomerForm(
+            data={
+                "name": "New customer",
+                "category": Customer.Category.CRM,
+                "assignee": inactive_user.pk,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        with self.assertRaises(ValidationError):
+            Customer.objects.create(
+                name="New customer", category=Customer.Category.CRM,
+                assignee=inactive_user,
+            )
+
+    def test_customer_forms_preserve_an_existing_inactive_assignee(self):
+        user = get_user_model().objects.create_user(username="historical-assignee")
+        customer = Customer.objects.create(
+            name="Previously assigned", category=Customer.Category.CRM, assignee=user
+        )
+        user.is_active = False
+        user.save(update_fields={"is_active"})
+        form = CustomerForm(
+            data={
+                "name": "Previously assigned",
+                "category": Customer.Category.CRM,
+                "status": Customer.Status.NO_CONTACT,
+                "assignee": user.pk,
+            },
+            instance=customer,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        updated = form.save()
+        self.assertEqual(updated.assignee_id, user.pk)
+
+    def test_existing_assignment_is_preserved_after_user_deactivation(self):
+        user = get_user_model().objects.create_user(username="historical-assignee")
+        customer = Customer.objects.create(
+            name="Previously assigned", category=Customer.Category.CRM, assignee=user
+        )
+        user.is_active = False
+        user.save(update_fields={"is_active"})
+
+        customer.notes = "Retained attribution"
+        customer.save()
+        customer.refresh_from_db()
+
+        self.assertEqual(customer.assignee_id, user.pk)
+        self.assertEqual(customer.notes, "Retained attribution")
+
+    def test_manager_cannot_deactivate_self_or_the_last_active_manager(self):
+        response = self.client.post(
+            reverse("crm:user_management"),
+            {
+                "action": "update",
+                "user_id": self.manager.pk,
+                "role": "CRM Manager",
+                "is_active": "",
+                "confirm": "yes",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.manager.refresh_from_db()
+        self.assertTrue(self.manager.is_active)

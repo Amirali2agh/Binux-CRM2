@@ -4,11 +4,15 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import jdatetime
+from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.contrib.auth.views import LoginView
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.utils import timezone
 from django.views.decorators.http import (
@@ -18,7 +22,12 @@ from django.views.decorators.http import (
 )
 
 from .catalog import PAGES, SECTIONS
-from .forms import CallOutcomeForm, CustomerForm
+from .forms import (
+    CallOutcomeForm,
+    CustomerForm,
+    TeamUserCreationForm,
+    TeamUserUpdateForm,
+)
 from .jalali_calendar import build_month
 from .models import CallRecord, Customer
 from .roles import (
@@ -73,6 +82,93 @@ def _customer_context(title, customers, *, page_key="customer_list"):
         "customers": customers,
         "status_choices": Customer.Status.choices,
     }
+
+
+def _user_management_context(request, creation_form=None, selected_form=None):
+    user_model = get_user_model()
+    users = user_model.objects.prefetch_related("groups").order_by("username")
+    entries = []
+    for user in users:
+        form = (
+            selected_form
+            if selected_form is not None and selected_form.user == user
+            else TeamUserUpdateForm(user=user, actor=request.user)
+        )
+        role_names = set(
+            user.groups.filter(name__in=("CRM Manager", "CRM Marketer"))
+            .values_list("name", flat=True)
+        )
+        entries.append(
+            {
+                "user": user,
+                "form": form,
+                "role_label": {
+                    "CRM Manager": "مدیر",
+                    "CRM Marketer": "بازاریاب",
+                }.get(next(iter(role_names)) if len(role_names) == 1 else "", "بدون نقش"),
+            }
+        )
+    section, _ = PAGES["settings"]
+    return {
+        "sections": SECTIONS,
+        "section": section,
+        "page": {"title": "افزودن کاربر", "description": "ایجاد و مدیریت حساب‌های تیم"},
+        "current_page": "user_management",
+        "creation_form": creation_form or TeamUserCreationForm(),
+        "user_entries": entries,
+    }
+
+
+@login_required
+@manager_required
+@require_http_methods(["GET", "POST"])
+def user_management(request):
+    if request.method == "GET":
+        return render(
+            request, "crm/user_management.html", _user_management_context(request)
+        )
+
+    action = request.POST.get("action")
+    if action == "create":
+        form = TeamUserCreationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "حساب کاربری با موفقیت ایجاد شد.")
+            return redirect("crm:user_management")
+        return render(
+            request,
+            "crm/user_management.html",
+            _user_management_context(request, creation_form=form),
+        )
+
+    if action == "update":
+        user_model = get_user_model()
+        try:
+            managed_user = user_model.objects.get(pk=request.POST.get("user_id"))
+        except (user_model.DoesNotExist, ValueError, TypeError):
+            return HttpResponseNotFound("کاربر پیدا نشد.")
+        form = TeamUserUpdateForm(
+            request.POST, user=managed_user, actor=request.user
+        )
+        if form.is_valid():
+            with transaction.atomic():
+                managed_user.is_active = form.cleaned_data["is_active"]
+                managed_user.save(update_fields={"is_active"})
+                role_groups = Group.objects.filter(
+                    name__in=("CRM Manager", "CRM Marketer")
+                )
+                managed_user.groups.remove(*role_groups)
+                role, _ = Group.objects.get_or_create(name=form.cleaned_data["role"])
+                managed_user.groups.add(role)
+            messages.success(request, "تغییرات حساب با موفقیت ذخیره شد.")
+            return redirect("crm:user_management")
+        return render(
+            request,
+            "crm/user_management.html",
+            _user_management_context(request, selected_form=form),
+        )
+
+    return HttpResponseBadRequest("درخواست مدیریت کاربر معتبر نیست.")
 
 
 @require_safe
