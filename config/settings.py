@@ -8,6 +8,10 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "unsafe-local-demo-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 NOGHTE_API_KEY_FILE = os.environ.get("NOGHTE_API_KEY_FILE", "")
+# Webhook signing secrets. Never commit values. PREVIOUS supports rotation.
+NOGHTE_WEBHOOK_SECRET = os.environ.get("NOGHTE_WEBHOOK_SECRET", "")
+NOGHTE_WEBHOOK_SECRET_PREVIOUS = os.environ.get("NOGHTE_WEBHOOK_SECRET_PREVIOUS", "")
+NOGHTE_WEBHOOK_TOLERANCE_SECONDS = int(os.environ.get("NOGHTE_WEBHOOK_TOLERANCE_SECONDS", "300"))
 ROOT_URLCONF = "config.urls"
 INSTALLED_APPS = [
     "django.contrib.admin",

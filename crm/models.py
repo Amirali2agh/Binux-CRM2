@@ -241,6 +241,7 @@ class CallRecord(models.Model):
     class Outcome(models.TextChoices):
         ANSWERED = "answered", "تماس پاسخ داده شده"
         CALL_AGAIN = "call_again", "تماس مجدد"
+        UNKNOWN = "unknown", "نامشخص / پشتیبانی‌نشده"
 
     customer = models.ForeignKey(
         Customer,
@@ -258,7 +259,72 @@ class CallRecord(models.Model):
         blank=True,
         null=True,
     )
+    outcome_locked = models.BooleanField(
+        "نتیجهٔ دستی",
+        default=False,
+        help_text="Set when an operator saves the outcome. Provider replays do not overwrite it.",
+    )
 
     class Meta:
         ordering = ("-called_at", "-pk")
         indexes = [models.Index(fields=("customer", "-called_at"))]
+
+
+class CallEvent(models.Model):
+    """One authenticated provider delivery, stored before customer association."""
+
+    class Disposition(models.TextChoices):
+        MATCHED = "matched", "Matched to a customer"
+        UNMATCHED = "unmatched", "Unknown number"
+        AMBIGUOUS = "ambiguous", "Ambiguous number"
+        INACTIVE = "inactive", "Inactive customer"
+        IGNORED = "ignored", "Not a call outcome"
+        FAILED = "failed", "Failed"
+        CONFLICT = "conflict", "Call already linked elsewhere"
+
+    provider = models.CharField(max_length=32, default="noghtefone")
+    delivery_key = models.CharField(max_length=128)
+    external_event_id = models.CharField(max_length=128, blank=True)
+    event_name = models.CharField(max_length=64, blank=True)
+    call_external_id = models.CharField(max_length=128, blank=True)
+    outcome = models.CharField(max_length=20, blank=True)
+    normalized_phone = models.CharField(max_length=32, blank=True)
+    disposition = models.CharField(max_length=20, choices=Disposition.choices)
+    detail = models.CharField(max_length=255, blank=True)
+    customer = models.ForeignKey(
+        Customer,
+        related_name="call_events",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+    )
+    call_record = models.ForeignKey(
+        CallRecord,
+        related_name="call_events",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+    )
+    occurred_at = models.DateTimeField(blank=True, null=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-received_at", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("provider", "delivery_key"),
+                name="call_event_provider_delivery_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("provider", "external_event_id"),
+                condition=~models.Q(external_event_id=""),
+                name="call_event_provider_event_id_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("disposition", "received_at")),
+            models.Index(fields=("call_external_id",)),
+        ]
+
+    def __str__(self):
+        return f"{self.provider}:{self.delivery_key}"

@@ -25,6 +25,11 @@ urlpatterns = [
     path("customers/<int:pk>/delete/", views.customer_delete, name="customer_delete"),
     path("customers/<int:pk>/archive/", views.customer_archive_action, name="customer_archive_action"),
     path("customers/<int:pk>/restore/", views.customer_restore, name="customer_restore"),
+    path(
+        "integrations/noghtefone/webhook/",
+        views.noghtefone_webhook,
+        name="noghtefone_webhook",
+    ),
 ]
 for section in SECTIONS:
     for page in section["pages"]:

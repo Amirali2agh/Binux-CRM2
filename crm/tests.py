@@ -339,6 +339,32 @@ class CrmRoleAccessTests(TestCase):
         self.assertNotContains(response, "ویرایش")
         self.assertNotContains(response, 'action="/customers/')
 
+    def test_marketer_sees_assigned_call_history_and_manager_can_edit_it(self):
+        from .models import CallRecord
+
+        CallRecord.objects.create(
+            customer=self.assigned_customer,
+            dialed_number="safe-role-call",
+            outcome=CallRecord.Outcome.ANSWERED,
+        )
+        self.client.force_login(self.marketer)
+        response = self.client.get(
+            reverse("crm:customer_detail", args=[self.assigned_customer.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "تاریخچهٔ تماس‌ها")
+        self.assertContains(response, "safe-role-call")
+        self.assertContains(response, "تماس پاسخ داده شده")
+        self.assertNotContains(response, 'name="outcome"')
+
+        self.client.force_login(self.manager)
+        manager_response = self.client.get(
+            reverse("crm:customer_detail", args=[self.assigned_customer.pk])
+        )
+        self.assertEqual(manager_response.status_code, 200)
+        self.assertContains(manager_response, "safe-role-call")
+        self.assertContains(manager_response, 'name="outcome"')
+
     def test_marketer_cannot_open_unassigned_or_another_marketers_customer(self):
         self.client.force_login(self.marketer)
         for customer in (self.other_customer, self.unassigned_customer):
@@ -426,7 +452,7 @@ class CrmRoleAccessTests(TestCase):
             reverse("crm:customer_create"),
             {
                 "name": "Manager-created record",
-                "category": Customer.Category.CRM,
+"category": Customer.Category.CRM,
                 "status": Customer.Status.NO_CONTACT,
             },
         )
@@ -1198,7 +1224,7 @@ class CustomerCallHistoryTests(TestCase):
         self.assertEqual(call.dialed_number, "test-dialed-number-answered")
         self.assertEqual(
             [label for _, label in CallRecord.Outcome.choices],
-            ["تماس پاسخ داده شده", "تماس مجدد"],
+            ["تماس پاسخ داده شده", "تماس مجدد", "نامشخص / پشتیبانی‌نشده"],
         )
 
     def test_customer_detail_displays_associated_calls(self):
@@ -1349,7 +1375,12 @@ class NoghteStatusMappingTests(TestCase):
                     map_call_status(provider_status),
                     (CallRecord.Outcome.CALL_AGAIN, Customer.Status.CALL_AGAIN),
                 )
-        self.assertIsNone(map_call_status("unrecognized"))
+        self.assertEqual(
+            map_call_status("unrecognized"),
+            (CallRecord.Outcome.UNKNOWN, None),
+        )
+        self.assertIsNone(map_call_status(""))
+        self.assertIsNone(map_call_status(None))
 
 
 class NoghteAPIClientTests(TestCase):
@@ -1654,7 +1685,8 @@ class NoghteCallSyncCommandTests(TestCase):
             self.run_sync()
             call = CallRecord.objects.get(external_id="provider-call-replay")
             call.outcome = CallRecord.Outcome.CALL_AGAIN
-            call.save(update_fields=("outcome",))
+            call.outcome_locked = True
+            call.save(update_fields=("outcome", "outcome_locked"))
             customer.status = Customer.Status.FOLLOW_UP
             customer.status_changed_at = self.call_time + timedelta(minutes=1)
             customer.save(update_fields=("status", "status_changed_at", "updated_at"))
@@ -1714,7 +1746,7 @@ class NoghteCallSyncCommandTests(TestCase):
         self.assertEqual(customer.status_changed_at, manual_change_at)
         self.assertEqual(CallRecord.objects.count(), 1)
 
-    def test_unmatched_and_unsupported_calls_are_not_associated(self):
+    def test_unmatched_calls_are_not_associated_and_unknown_status_is_recorded(self):
         from unittest.mock import patch
 
         from .integrations.noghte import NoghteAPIClient
@@ -1729,8 +1761,119 @@ class NoghteCallSyncCommandTests(TestCase):
             self.run_sync()
 
         customer.refresh_from_db()
-        self.assertEqual(CallRecord.objects.count(), 0)
+        call = CallRecord.objects.get(external_id="provider-unsupported")
+        self.assertEqual(call.customer, customer)
+        self.assertEqual(call.outcome, CallRecord.Outcome.UNKNOWN)
+        self.assertFalse(CallRecord.objects.filter(external_id="provider-mismatch").exists())
         self.assertEqual(customer.status, Customer.Status.NO_CONTACT)
+
+    def test_later_poll_refines_an_unlocked_unknown_outcome(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("09120001122")
+        unknown = self.provider_call("provider-refine", "+989120001122", status="queued")
+        answered = self.provider_call("provider-refine", "+989120001122", status="answered")
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=[iter([unknown]), iter([answered])],
+        ):
+            self.run_sync()
+            call = CallRecord.objects.get(external_id="provider-refine")
+            self.assertEqual(call.outcome, CallRecord.Outcome.UNKNOWN)
+            self.run_sync()
+
+        call.refresh_from_db()
+        customer.refresh_from_db()
+        self.assertEqual(CallRecord.objects.count(), 1)
+        self.assertEqual(call.outcome, CallRecord.Outcome.ANSWERED)
+        self.assertFalse(call.outcome_locked)
+        self.assertEqual(customer.status, Customer.Status.REJECTED)
+
+    def test_iranian_number_formats_match_and_equivalent_duplicates_are_ambiguous(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        customer = self.make_customer("09121234567")
+        provider_call = self.provider_call("provider-normalized", "+989121234567")
+        with patch.object(NoghteAPIClient, "iter_calls", return_value=iter([provider_call])) as lookup:
+            self.run_sync()
+
+        call = CallRecord.objects.get(external_id="provider-normalized")
+        customer.refresh_from_db()
+        self.assertEqual(call.customer, customer)
+        self.assertEqual(call.dialed_number, "+989121234567")
+        self.assertEqual(customer.status, Customer.Status.REJECTED)
+        self.assertEqual(lookup.call_args.kwargs["number"], "09121234567")
+
+        self.make_customer("9125556677")
+        self.make_customer("+989125556677")
+        with patch.object(
+            NoghteAPIClient, "iter_calls", side_effect=lambda **kwargs: iter([])
+        ) as lookup:
+            self.run_sync()
+        requested = [call.kwargs["number"] for call in lookup.call_args_list]
+        self.assertNotIn("9125556677", requested)
+        self.assertNotIn("+989125556677", requested)
+
+    def test_secondary_and_tertiary_numbers_are_polled_and_associated(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+        from .models import CallRecord
+
+        secondary = self.make_customer("")
+        secondary.phone_secondary = "09123330000"
+        secondary.save(update_fields=("phone", "phone_secondary", "updated_at"))
+        tertiary = self.make_customer("")
+        tertiary.phone_tertiary = "9144400000"
+        tertiary.save(update_fields=("phone", "phone_tertiary", "updated_at"))
+        calls = {
+            "09123330000": [self.provider_call("provider-secondary", "+989123330000")],
+            "9144400000": [
+                self.provider_call("provider-tertiary", "09144400000", status="no_answer")
+            ],
+        }
+        with patch.object(
+            NoghteAPIClient,
+            "iter_calls",
+            side_effect=lambda *, number, since: iter(calls[number]),
+        ) as lookup:
+            self.run_sync()
+
+        self.assertEqual(
+            CallRecord.objects.get(external_id="provider-secondary").customer, secondary
+        )
+        tertiary_call = CallRecord.objects.get(external_id="provider-tertiary")
+        self.assertEqual(tertiary_call.customer, tertiary)
+        self.assertEqual(tertiary_call.outcome, CallRecord.Outcome.CALL_AGAIN)
+        self.assertCountEqual(
+            [call.kwargs["number"] for call in lookup.call_args_list],
+            ["09123330000", "9144400000"],
+        )
+
+    def test_number_shared_across_customer_slots_is_not_polled(self):
+        from unittest.mock import patch
+
+        from .integrations.noghte import NoghteAPIClient
+
+        left = self.make_customer("")
+        left.phone_secondary = "09126667777"
+        left.save(update_fields=("phone", "phone_secondary", "updated_at"))
+        self.make_customer("+989126667777")
+        with patch.object(
+            NoghteAPIClient, "iter_calls", side_effect=lambda **kwargs: iter([])
+        ) as lookup:
+            self.run_sync()
+
+        requested = [call.kwargs["number"] for call in lookup.call_args_list]
+        self.assertNotIn("09126667777", requested)
+        self.assertNotIn("+989126667777", requested)
 
     def test_duplicate_customer_numbers_are_skipped_without_provider_lookup(self):
         from unittest.mock import patch

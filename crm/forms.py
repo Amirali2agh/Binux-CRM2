@@ -150,3 +150,10 @@ class CallOutcomeForm(forms.ModelForm):
         model = CallRecord
         fields = ("outcome",)
         widgets = {"outcome": forms.Select(attrs={"class": "form-control"})}
+
+    def save(self, commit=True):
+        call = super().save(commit=False)
+        call.outcome_locked = True
+        if commit:
+            call.save()
+        return call

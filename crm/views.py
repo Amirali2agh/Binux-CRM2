@@ -1,9 +1,12 @@
+import logging
 import re
+import time
 from datetime import timedelta
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import jdatetime
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -12,16 +15,22 @@ from django.contrib.auth.views import LoginView
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.http import HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import (
     require_http_methods,
     require_POST,
     require_safe,
 )
 
+from .call_ingestion import IngestTemporarilyUnavailable
 from .catalog import PAGES, SECTIONS
+from .forms import CallOutcomeForm, CustomerForm
+from .integrations.noghtefone.ingest import ingest_signed_body
+from .integrations.noghtefone.signatures import signature_is_valid
 from .forms import (
     CallOutcomeForm,
     CustomerForm,
@@ -36,6 +45,9 @@ from .roles import (
     manager_required,
     role_required,
 )
+
+logger = logging.getLogger(__name__)
+MAX_WEBHOOK_BODY_BYTES = 1_000_000
 
 
 class TeamLoginView(LoginView):
@@ -457,6 +469,63 @@ def customer_detail(request, pk):
             "call_outcome_choices": CallRecord.Outcome.choices,
         },
     )
+
+
+@csrf_exempt
+@require_POST
+def noghtefone_webhook(request):
+    """Accept a signed Noghtefone webhook. Authentication is the HMAC signature.
+
+    A durable store is acknowledged with 200. Signature or timestamp failures
+    are 401 and are not stored. A database error before commit is 503 so the
+    provider retries. Secrets and payload bodies are not logged.
+    """
+    raw_body = request.body
+    if len(raw_body) > MAX_WEBHOOK_BODY_BYTES:
+        logger.warning("Noghtefone webhook rejected because the body is too large.")
+        return HttpResponse(status=413)
+
+    secrets = [
+        secret
+        for secret in (
+            settings.NOGHTE_WEBHOOK_SECRET,
+            settings.NOGHTE_WEBHOOK_SECRET_PREVIOUS,
+        )
+        if secret
+    ]
+    if not signature_is_valid(
+        raw_body,
+        request.META.get("HTTP_X_NOGHTE_SIGNATURE", ""),
+        secrets,
+        now=time.time(),
+        tolerance_seconds=settings.NOGHTE_WEBHOOK_TOLERANCE_SECONDS,
+    ):
+        logger.warning("Noghtefone webhook rejected (signature, timestamp, or missing secret).")
+        return HttpResponse(status=401)
+
+    delivery_id = request.META.get("HTTP_X_NOGHTE_DELIVERY", "").strip()
+    if not delivery_id or len(delivery_id) > 128:
+        logger.warning("Noghtefone webhook rejected because the delivery id is missing.")
+        return HttpResponse(status=400)
+
+    try:
+        result = ingest_signed_body(
+            raw_body=raw_body,
+            delivery_id=delivery_id,
+            event_header=request.META.get("HTTP_X_NOGHTE_EVENT", ""),
+        )
+    except IngestTemporarilyUnavailable:
+        logger.warning(
+            "Noghtefone webhook was not stored (delivery_id=%s).", delivery_id
+        )
+        return HttpResponse(status=503)
+
+    logger.info(
+        "Noghtefone webhook stored (delivery_id=%s, disposition=%s).",
+        delivery_id,
+        result.disposition,
+    )
+    return HttpResponse(status=200)
 
 
 @login_required

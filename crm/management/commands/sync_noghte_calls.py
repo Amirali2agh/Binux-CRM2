@@ -6,8 +6,10 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from crm.call_ingestion import apply_customer_status, should_replace_outcome
 from crm.integrations.noghte import NoghteAPIClient, NoghteAPIError, map_call_status
 from crm.models import CallRecord, Customer
+from crm.phones import phone_match_key, unique_phone_keys
 
 
 class Command(BaseCommand):
@@ -36,21 +38,31 @@ class Command(BaseCommand):
 
         customers_by_phone = defaultdict(list)
         phone_record_counts = defaultdict(int)
-        customers = Customer.objects.exclude(phone="").order_by("phone", "pk")
+        query_values = {}
+        customers = Customer.objects.exclude(
+            phone="", phone_secondary="", phone_tertiary=""
+        ).order_by("pk")
         for customer in customers.iterator():
-            if not customer.phone.strip():
+            pairs = unique_phone_keys(
+                (customer.phone, customer.phone_secondary, customer.phone_tertiary)
+            )
+            if not pairs:
                 continue
-            phone_record_counts[customer.phone] += 1
-            if customer.archived_at is None and customer.trashed_at is None:
-                customers_by_phone[customer.phone].append(customer)
+            active = customer.archived_at is None and customer.trashed_at is None
+            for match_key, raw in pairs:
+                phone_record_counts[match_key] += 1
+                if active:
+                    customers_by_phone[match_key].append(customer)
+                    query_values.setdefault(match_key, raw)
 
         stats = defaultdict(int)
-        for phone in sorted(customers_by_phone):
-            matches = customers_by_phone[phone]
-            if len(matches) != 1 or phone_record_counts[phone] != 1:
+        for match_key in sorted(customers_by_phone):
+            matches = customers_by_phone[match_key]
+            if len(matches) != 1 or phone_record_counts[match_key] != 1:
                 stats["ambiguous"] += 1
                 continue
             customer = matches[0]
+            phone = query_values[match_key]
             try:
                 provider_calls = list(client.iter_calls(number=phone, since=since))
             except NoghteAPIError:
@@ -82,7 +94,7 @@ class Command(BaseCommand):
                         external_id=call["external_id"],
                         defaults={
                             "customer": current_customer,
-                            "dialed_number": phone,
+                            "dialed_number": call["dialed_number"],
                             "outcome": call["outcome"],
                             "called_at": call["called_at"],
                         },
@@ -90,37 +102,41 @@ class Command(BaseCommand):
                     if not created:
                         if record.customer_id != current_customer.pk:
                             stats["identity_conflicts"] += 1
+                        elif (
+                            not record.outcome_locked
+                            and should_replace_outcome(record.outcome, call["outcome"])
+                        ):
+                            stats["duplicates"] += 1
+                            record.outcome = call["outcome"]
+                            record.save(update_fields=("outcome",))
+                            if call["customer_status"] is not None:
+                                stats["status_updated"] += apply_customer_status(
+                                    current_customer, call["outcome"], call["status_at"]
+                                )
                         else:
                             stats["duplicates"] += 1
                         continue
 
                     stats["imported"] += 1
-                    status_updated = (
-                        Customer.objects.filter(
-                            pk=current_customer.pk,
-                            archived_at__isnull=True,
-                            trashed_at__isnull=True,
-                            status_changed_at__lt=call["status_at"],
+                    if call["outcome"] == CallRecord.Outcome.UNKNOWN:
+                        stats["unknown"] += 1
+                    if call["customer_status"] is not None:
+                        stats["status_updated"] += apply_customer_status(
+                            current_customer, call["outcome"], call["status_at"]
                         )
-                        .exclude(status=call["customer_status"])
-                        .update(
-                            status=call["customer_status"],
-                            status_changed_at=call["status_at"],
-                            updated_at=timezone.now(),
-                        )
-                    )
-                    stats["status_updated"] += status_updated
 
         self.stdout.write(
             "Imported {imported}; duplicates {duplicates}; ambiguous {ambiguous}; "
-            "unmatched {unmatched}; unsupported {unsupported}; non-outbound {non_outbound}; "
-            "invalid {invalid}; identity conflicts {identity_conflicts}; "
+            "unmatched {unmatched}; unknown {unknown}; unsupported {unsupported}; "
+            "non-outbound {non_outbound}; invalid {invalid}; "
+            "identity conflicts {identity_conflicts}; "
             "lifecycle-preserved {lifecycle_preserved}; status updates {status_updated}.".format(
                 **{key: stats[key] for key in (
                     "imported",
                     "duplicates",
                     "ambiguous",
                     "unmatched",
+                    "unknown",
                     "unsupported",
                     "non_outbound",
                     "invalid",
@@ -133,11 +149,15 @@ class Command(BaseCommand):
 
     @staticmethod
     def _parse_call(provider_call, phone):
+        # Provisional call-object fields (id, direction, to, status, started_at,
+        # answered_at, ended_at). The public API page does not document them.
+        # See docs/noghtefone-integration.md.
         if not isinstance(provider_call, dict):
             return None, "invalid"
         if provider_call.get("direction") != "outbound":
             return None, "non_outbound"
-        if provider_call.get("to") != phone:
+        provider_number = provider_call.get("to")
+        if not isinstance(provider_number, str) or phone_match_key(provider_number) != phone_match_key(phone):
             return None, "unmatched"
 
         status_mapping = map_call_status(provider_call.get("status"))
@@ -169,6 +189,7 @@ class Command(BaseCommand):
             "customer_status": customer_status,
             "called_at": called_at,
             "status_at": status_at,
+            "dialed_number": provider_number[:64],
         }, None
 
     @staticmethod
