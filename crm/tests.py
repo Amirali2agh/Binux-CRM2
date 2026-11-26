@@ -477,7 +477,7 @@ class DisplayOnlyPagesTests(TestCase):
                 self.assertContains(
                     response, f'<h1 id="page-title">{heading}</h1>', html=True
                 )
-                if name not in {"customer_list", "follow_ups", "calendar"}:
+                if name not in {"customer_list", "follow_ups", "calendar", "office_inventory"}:
                     self.assertContains(response, 'data-demo="true"')
                 self.assertContains(response, f'href="{url}" aria-current="page"')
                 expected_current_pages = 3 if name == "customer_list" else 1
@@ -514,6 +514,22 @@ class DisplayOnlyPagesTests(TestCase):
             self.assertContains(response, group)
         self.assertContains(response, 'dir="rtl"')
         self.assertContains(response, 'aria-expanded="true"')
+
+    def test_office_inventory_hides_only_the_circled_shell_and_heading_copy(self):
+        response = self.client.get(reverse("crm:office_inventory"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'class="topbar-title"')
+        self.assertNotContains(response, 'class="topbar-search"')
+        self.assertNotContains(response, 'class="topbar-account"')
+        self.assertNotContains(response, 'data-demo="true"')
+        self.assertNotContains(response, "نمایی از وسایل و تجهیزات دفتر؛ هنوز موجودی واقعی ثبت نمی‌شود.")
+        self.assertContains(response, 'class="topbar-status"')
+        self.assertContains(response, 'class="logout-form"')
+        self.assertContains(response, 'class="search-placeholder"')
+        self.assertContains(response, "اطلاعات این صفحه نمونه است")
+        self.assertContains(response, '<h1 id="page-title">موجودی دفتر</h1>', html=True)
+        self.assertContains(response, "صندلی اداری نمونه")
+        self.assertContains(response, "مانیتور نمونه")
 
     def test_customer_navigation_is_first_and_brand_logo_is_accessible(self):
         response = self.client.get(reverse("crm:customer_list"))

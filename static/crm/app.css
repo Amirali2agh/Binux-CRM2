@@ -336,15 +336,7 @@ html:not(.js-ready) .group-title-nojs { display: flex; align-items: center; min-
   border-bottom: 1px solid #e5eaf2;
   background: #fff;
 }
-.topbar-title {
-  font-size: 16px;
-  font-weight: 750;
-  color: #25334f;
-}
-.topbar-placeholders { margin-right: auto; display: flex; align-items: center; gap: 10px; color: #536781; font-size: 12px; }
-.topbar-search, .topbar-account { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 5px 10px; border: 1px solid #e3eaf3; border-radius: 9px; }
-.topbar-search .icon { width: 16px; height: 16px; }
-.topbar-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: #e4edfb; color: #345a90; font-weight: 750; }
+
 .topbar-status {
   display: flex;
   align-items: center;
@@ -658,9 +650,6 @@ tbody tr:hover {
 html:not(.js-ready) .sidebar-collapse {
   display: none;
 }
-@media (max-width: 1100px) and (min-width: 761px) {
-  .topbar-search span { display: none; }
-}
 @media (max-width: 760px) {
   .app-shell,
   .app-shell.sidebar-collapsed {
@@ -693,14 +682,7 @@ html:not(.js-ready) .sidebar-collapse {
     height: 66px;
     padding: 0 20px;
   }
-  .topbar-placeholders { gap: 4px; }
-  .topbar-search, .topbar-account { border: 0; padding: 4px; }
-  .topbar-search span, .topbar-account > span:last-child { display: none; }
-  .topbar-search .icon { width: 20px; height: 20px; }
-  .topbar-avatar { width: 24px; height: 24px; }
-  .topbar-title {
-    font-size: 14px;
-  }
+
   .topbar-status {
     font-size: 10px;
     padding: 6px 9px;
@@ -806,9 +788,7 @@ html:not(.js-ready) .sidebar-collapse {
 }
 @media (max-width: 380px) {
   .topbar-status { display: none; }
-  .topbar-title {
-    font-size: 12px;
-  }
+
   .topbar-status {
     font-size: 9px;
   }
@@ -912,8 +892,6 @@ html[data-theme="dark"] .calendar-empty {
 html[data-theme="dark"] .topbar {
   border-bottom-color: #626262;
 }
-html[data-theme="dark"] .topbar-title,
-html[data-theme="dark"] .topbar-placeholders,
 html[data-theme="dark"] .topbar-status,
 html[data-theme="dark"] .breadcrumbs,
 html[data-theme="dark"] .breadcrumbs span:last-child,
@@ -1069,10 +1047,7 @@ html[data-theme="dark"] .topbar-avatar {
   background: #355c98;
   color: #fff;
 }
-html[data-theme="dark"] .topbar-search,
-html[data-theme="dark"] .topbar-account {
-  border-color: #707070;
-}
+
 html[data-theme="dark"] .customer-filter-tabs {
   border-color: #626262;
   background: #4a4a4a;
