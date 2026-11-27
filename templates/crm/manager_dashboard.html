@@ -1,0 +1,64 @@
+{% extends 'crm/base.html' %}
+{% block content %}
+<section class="page-heading" aria-labelledby="page-title">
+  <div>
+    <h1 id="page-title">{{ page.title }}</h1>
+    <p class="page-lead">آمار فقط بر پایهٔ تماس‌های ذخیره‌شده از اتصال تلفنی است. این صفحه سرویس تلفنی را زنده فراخوانی نمی‌کند؛ انتساب هر تماس بر اساس بازاریاب مسئول فعلی مشتری است، نه فردی که تماس را انجام داده.</p>
+  </div>
+</section>
+<section class="dashboard-source" aria-label="وضعیت داده‌های اتصال تلفنی">
+  <h2>وضعیت داده‌ها</h2>
+  <p>بازهٔ پیش‌فرض: ۳۰ روز اخیر بر اساس زمان تماس ثبت‌شده. تازگی داده‌ها به دریافت وب‌هوک و اجرای دستی همگام‌سازی بستگی دارد و آمار، دادهٔ زنده نیست.</p>
+  {% if latest_webhook %}
+    <p>آخرین رویداد وب‌هوک ثبت‌شده: <time datetime="{{ latest_webhook.received_at|date:'c' }}">{{ latest_webhook.received_at|date:'SHORT_DATETIME_FORMAT' }}</time> ({{ latest_webhook.get_disposition_display }})</p>
+  {% else %}
+    <p>هنوز رویداد وب‌هوکی ثبت نشده؛ وضعیت دریافت تماس از وب‌هوک در دسترس نیست.</p>
+  {% endif %}
+  {% if latest_sync_run %}
+    {% if latest_sync_run.status == 'succeeded' %}<p>آخرین همگام‌سازی API با موفقیت در <time datetime="{{ latest_sync_run.finished_at|date:'c' }}">{{ latest_sync_run.finished_at|date:'SHORT_DATETIME_FORMAT' }}</time> تمام شد و {{ latest_sync_run.imported_count }} تماس جدید وارد کرد.</p>
+    {% elif latest_sync_run.status == 'failed' %}<p class="dashboard-warning" role="status">آخرین همگام‌سازی API ناموفق بود (شروع: {{ latest_sync_run.started_at|date:'SHORT_DATETIME_FORMAT' }}، پایان: {{ latest_sync_run.finished_at|date:'SHORT_DATETIME_FORMAT' }}). ممکن است بخشی از رکوردها وارد شده باشند؛ آمار لزوماً کامل یا به‌روز نیست.</p>
+    {% else %}<p class="dashboard-warning" role="status">آخرین همگام‌سازی API در {{ latest_sync_run.started_at|date:'SHORT_DATETIME_FORMAT' }} شروع شده اما پایان آن ثبت نشده است؛ آمار ممکن است ناقص باشد.</p>{% endif %}
+  {% else %}
+    <p>جدیدترین همگام‌سازی API هنوز اجرا نشده است؛ ممکن است تماس‌های پیش از دریافت وب‌هوک در آمار نباشند.</p>
+  {% endif %}
+  {% if failed_webhook_count %}<p class="dashboard-warning" role="status">{{ failed_webhook_count }} رویداد وب‌هوک با خطا ثبت شده است؛ پوشش داده‌ها ممکن است ناقص باشد.</p>{% endif %}
+  {% if not has_provider_calls %}<p class="dashboard-warning" role="status">هنوز تماس متصل به شناسهٔ سرویس تلفنی در پایگاه داده ثبت نشده است؛ آمار تماس در دسترس نیست.</p>{% endif %}
+</section>
+<form method="get" class="dashboard-filters" aria-label="فیلترهای داشبورد تماس">
+  <label>عضو تیم (بازاریاب مسئول فعلی)
+    <select name="staff"><option value="">همه</option>{% for person in marketers %}<option value="{{ person.pk }}"{% if staff_value == person.pk|stringformat:'s' %} selected{% endif %}>{{ person.get_username }}</option>{% endfor %}<option value="unassigned"{% if staff_value == 'unassigned' %} selected{% endif %}>بدون بازاریاب مسئول فعلی</option></select>
+  </label>
+  <label>شخص (بر اساس بازاریاب مسئول فعلی)
+    <select name="person"><option value="">همه</option>{% for person in marketers %}<option value="{{ person.pk }}"{% if person_value == person.pk|stringformat:'s' %} selected{% endif %}>{{ person.get_username }}</option>{% endfor %}<option value="unassigned"{% if person_value == 'unassigned' %} selected{% endif %}>بدون بازاریاب مسئول فعلی</option></select>
+  </label>
+  <label>نتیجهٔ تماس
+    <select name="status"><option value="">همه</option>{% for value, label in outcome_choices %}<option value="{{ value }}"{% if outcome_value == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <button type="submit">اعمال فیلتر</button>
+  <a class="secondary-action" href="{% url 'crm:manager_dashboard' %}">پاک‌کردن فیلترها</a>
+</form>
+<section class="dashboard-summary" aria-label="خلاصهٔ تماس‌ها">
+  <article><h2>کل تماس‌ها</h2><strong>{{ totals.total }}</strong></article>
+  <article><h2>پاسخ‌داده‌شده</h2><strong>{{ totals.answered }}</strong></article>
+  <article><h2>بی‌پاسخ / تماس مجدد</h2><strong>{{ totals.unanswered }}</strong></article>
+  <article><h2>نتیجهٔ نامشخص</h2><strong>{{ totals.unknown }}</strong></article>
+</section>
+{% if totals.total %}
+<section class="dashboard-charts" aria-label="نمودارهای تماس">
+  <article class="dashboard-chart-card">
+    <h2>توزیع نتایج تماس</h2>
+    <div class="dashboard-pie" role="img" aria-label="توزیع نتایج تماس‌ها" style="{{ outcome_pie_style }}"></div>
+    <table class="dashboard-chart-table"><caption>تعداد تماس بر اساس نتیجه</caption><thead><tr><th scope="col">نتیجه</th><th scope="col">تعداد</th></tr></thead><tbody>{% for item in outcome_segments %}<tr><td>{{ item.label }}</td><td>{{ item.count }}</td></tr>{% endfor %}</tbody></table>
+  </article>
+  <article class="dashboard-chart-card">
+    <h2>تماس به تفکیک بازاریاب مسئول فعلی</h2>
+    {% if assigned_segments %}<div class="dashboard-pie" role="img" aria-label="تعداد تماس‌ها به تفکیک بازاریاب مسئول فعلی" style="{{ assignee_pie_style }}"></div>{% else %}<p>هیچ تماسی به بازاریاب مسئول منتسب نیست.</p>{% endif %}
+    <table class="dashboard-chart-table"><caption>تعداد تماس بر اساس بازاریاب مسئول فعلی</caption><thead><tr><th scope="col">بازاریاب مسئول</th><th scope="col">تعداد</th></tr></thead><tbody>{% for item in assigned_segments %}<tr><td>{{ item.label }}</td><td>{{ item.count }}</td></tr>{% empty %}<tr><td colspan="2">بدون تماس منتسب</td></tr>{% endfor %}</tbody></table>
+  </article>
+</section>
+{% elif has_provider_calls %}
+<p class="empty-state" role="status">با فیلترهای انتخاب‌شده تماسی پیدا نشد.</p>
+{% else %}
+<p class="empty-state" role="status">هنوز تماس ثبت نشده است.</p>
+{% endif %}
+{% endblock %}

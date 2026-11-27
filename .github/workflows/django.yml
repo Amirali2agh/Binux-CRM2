@@ -39,8 +39,8 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python manage.py migrate --noinput
       - name: Create an isolated browser-test user
-        run: python manage.py shell -c "import os; from django.contrib.auth import get_user_model; from django.contrib.auth.models import Group; user=get_user_model().objects.create_user(username='calendar-ci', password=os.environ['CALENDAR_TEST_PASSWORD']); user.groups.add(Group.objects.get(name='CRM Manager'))"
-      - name: Check the calendar in Chromium at desktop and mobile widths
+        run: python manage.py shell -c "import os; from django.contrib.auth import get_user_model; from django.contrib.auth.models import Group; from crm.models import CallRecord, Customer; User=get_user_model(); manager=User.objects.create_user(username='calendar-ci', password=os.environ['CALENDAR_TEST_PASSWORD']); manager.groups.add(Group.objects.get(name='CRM Manager')); marketer=User.objects.create_user(username='dashboard-ci-marketer'); marketer.groups.add(Group.objects.get_or_create(name='CRM Marketer')[0]); customer=Customer.objects.create(name='Synthetic dashboard customer', assignee=marketer); CallRecord.objects.create(customer=customer, dialed_number='synthetic-dashboard-number', outcome=CallRecord.Outcome.ANSWERED, external_id='synthetic-dashboard-answered'); CallRecord.objects.create(customer=customer, dialed_number='synthetic-dashboard-number', outcome=CallRecord.Outcome.CALL_AGAIN, external_id='synthetic-dashboard-unanswered')"
+      - name: Check CRM pages in Chromium at desktop and mobile widths
         run: |
           python manage.py runserver 127.0.0.1:8000 --noreload > /tmp/calendar-runserver.log 2>&1 &
           python scripts/calendar_browser_check.py

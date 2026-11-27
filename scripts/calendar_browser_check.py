@@ -205,9 +205,59 @@ async def main():
                 f"Customer-assignment page overflows at {width}px: {dimensions}"
             )
 
+        response = await page.goto(f"{BASE_URL}/management/dashboard/")
+        assert response and response.status == 200
+        assert await page.locator("html").get_attribute("dir") == "rtl"
+        assert await page.get_by_role("heading", name="داشبورد تماس‌ها").count() == 1
+        assert await page.get_by_role("link", name="داشبورد تماس‌ها").count() == 1
+        assert await page.get_by_role("img", name="توزیع نتایج تماس‌ها").count() == 1
+        assert await page.get_by_role(
+            "img", name="تعداد تماس‌ها به تفکیک بازاریاب مسئول فعلی"
+        ).count() == 1
+        assert await page.locator(".dashboard-chart-table caption").count() == 2
+        assert await page.locator(".dashboard-pie").count() == 2
+        chart_background = await page.locator(".dashboard-pie").first.evaluate(
+            "el => getComputedStyle(el).backgroundImage"
+        )
+        assert "conic-gradient" in chart_background, chart_background
+        total_calls = page.locator(".dashboard-summary article").first.locator("strong")
+        assert await total_calls.inner_text() == "2"
+
+        await page.locator('select[name="staff"]').select_option(index=1)
+        await page.get_by_role("button", name="اعمال فیلتر").click()
+        assert await page.locator(".dashboard-summary article").first.locator("strong").inner_text() == "2"
+        await page.locator('select[name="status"]').select_option("call_again")
+        await page.get_by_role("button", name="اعمال فیلتر").click()
+        assert await page.locator(".dashboard-summary article").first.locator("strong").inner_text() == "1"
+
+        for width in (1440, 390, 320):
+            await page.set_viewport_size({"width": width, "height": 1000})
+            dimensions = await page.evaluate(
+                "({viewport: document.documentElement.clientWidth, "
+                "document: document.documentElement.scrollWidth})"
+            )
+            if dimensions["document"] > dimensions["viewport"]:
+                dimensions["offenders"] = await page.evaluate(
+                    """() => [...document.querySelectorAll('body *')]
+                      .map(el => ({tag: el.tagName, cls: String(el.className).slice(0, 100),
+                        right: Math.round(el.getBoundingClientRect().right),
+                        width: Math.round(el.getBoundingClientRect().width)}))
+                      .filter(el => el.right > document.documentElement.clientWidth)
+                      .slice(-12)"""
+                )
+            assert dimensions["document"] <= dimensions["viewport"], (
+                f"Manager dashboard overflows at {width}px: {dimensions}"
+            )
+            chart_columns = await page.locator(".dashboard-charts").evaluate(
+                "el => getComputedStyle(el).gridTemplateColumns.split(' ').length"
+            )
+            assert chart_columns == (1 if width <= 760 else 2), (
+                f"Dashboard chart layout has {chart_columns} columns at {width}px"
+            )
+
         assert not page_errors, f"Browser JavaScript errors: {page_errors}"
-        print("Browser checks passed: calendar/theme, user management, and customer "
-              "assignment page at 1440/390/320px; no overflow/page errors.")
+        print("Browser checks passed: calendar/theme, user management, customer "
+              "assignment, and manager call dashboard at 1440/390/320px; no overflow/page errors.")
         await browser.close()
 
 

@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from .forms import CustomerForm
 from .jalali_calendar import build_month
-from .models import CallRecord, Customer
+from .models import CallEvent, CallRecord, CallSyncRun, Customer
 
 
 def create_manager_user(username, **kwargs):
@@ -1653,6 +1653,10 @@ class NoghteCallSyncCommandTests(TestCase):
         self.assertEqual(call.called_at, self.call_time)
         self.assertEqual(customer.status, Customer.Status.REJECTED)
         self.assertEqual(customer.status_changed_at, self.call_time)
+        sync_run = CallSyncRun.objects.get()
+        self.assertEqual(sync_run.status, CallSyncRun.Status.SUCCEEDED)
+        self.assertEqual(sync_run.imported_count, 1)
+        self.assertIsNotNone(sync_run.finished_at)
         self.assertNotIn(customer.phone, output.getvalue())
         self.assertNotIn("provider-call-answered", output.getvalue())
 
@@ -1966,9 +1970,17 @@ class NoghteCallSyncCommandTests(TestCase):
                 self.run_sync(output)
             self.assertNotIn("synthetic-command-secret", str(error.exception))
             self.assertEqual(CallRecord.objects.count(), 1)
+            failed_run = CallSyncRun.objects.get()
+            self.assertEqual(failed_run.status, CallSyncRun.Status.FAILED)
+            self.assertEqual(failed_run.imported_count, 1)
+            self.assertIsNotNone(failed_run.finished_at)
             self.run_sync(output)
 
         self.assertEqual(CallRecord.objects.count(), 2)
+        self.assertEqual(
+            list(CallSyncRun.objects.values_list("status", flat=True)),
+            [CallSyncRun.Status.SUCCEEDED, CallSyncRun.Status.FAILED],
+        )
         self.assertEqual(CallRecord.objects.filter(external_id="provider-call-before-failure").count(), 1)
         self.assertEqual(first_customer.call_records.count(), 1)
         self.assertEqual(second_customer.call_records.count(), 1)
@@ -2090,6 +2102,7 @@ class ManagerUserManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(user.groups.filter(name="CRM Marketer").exists())
 
+
     def test_marketer_cannot_open_or_submit_user_management(self):
         marketer = get_user_model().objects.create_user(
             username="user-management-marketer", password="safe-test-password"
@@ -2192,6 +2205,136 @@ class ManagerUserManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.manager.refresh_from_db()
         self.assertTrue(self.manager.is_active)
+
+class ManagerCallDashboardTests(TestCase):
+    def setUp(self):
+        self.manager = create_manager_user("dashboard-manager")
+        self.marketer = get_user_model().objects.create_user(
+            username="dashboard-marketer", password="safe-test-password"
+        )
+        self.marketer.groups.add(Group.objects.get_or_create(name="CRM Marketer")[0])
+        self.second_marketer = get_user_model().objects.create_user(
+            username="dashboard-second-marketer", password="safe-test-password"
+        )
+        self.second_marketer.groups.add(
+            Group.objects.get_or_create(name="CRM Marketer")[0]
+        )
+
+    def test_dashboard_aggregates_recent_provider_calls_and_filters_by_assignee(self):
+        old_call_time = timezone.now() - timedelta(days=5)
+        first_customer = Customer.objects.create(
+            name="First dashboard customer", assignee=self.marketer
+        )
+        second_customer = Customer.objects.create(
+            name="Second dashboard customer", assignee=self.second_marketer
+        )
+        unassigned_customer = Customer.objects.create(name="Unassigned dashboard customer")
+        for customer, outcome, suffix in (
+            (first_customer, CallRecord.Outcome.ANSWERED, "first-answered"),
+            (first_customer, CallRecord.Outcome.CALL_AGAIN, "first-unanswered"),
+            (second_customer, CallRecord.Outcome.ANSWERED, "second-answered"),
+            (unassigned_customer, CallRecord.Outcome.UNKNOWN, "unknown"),
+        ):
+            CallRecord.objects.create(
+                customer=customer,
+                dialed_number=f"synthetic-{suffix}",
+                outcome=outcome,
+                external_id=f"provider-{suffix}",
+                called_at=old_call_time,
+            )
+
+        CallRecord.objects.create(
+            customer=first_customer,
+            dialed_number="synthetic-manual-only",
+            outcome=CallRecord.Outcome.ANSWERED,
+            called_at=old_call_time,
+        )
+
+        self.client.force_login(self.manager)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["totals"], {
+            "total": 4,
+            "answered": 2,
+            "unanswered": 1,
+            "unknown": 1,
+        })
+        self.assertContains(response, "dashboard-manager")
+        self.assertContains(response, "نامشخص / پشتیبانی‌نشده")
+        self.assertContains(response, 'aria-label="توزیع نتایج تماس‌ها"')
+        self.assertContains(response, 'aria-label="تعداد تماس‌ها به تفکیک بازاریاب مسئول فعلی"')
+        self.assertContains(response, "جدیدترین همگام‌سازی API هنوز اجرا نشده است")
+
+        filtered = self.client.get("/management/dashboard/?staff=%s" % self.marketer.pk)
+        self.assertEqual(filtered.context["totals"]["total"], 2)
+        self.assertEqual(filtered.context["totals"]["answered"], 1)
+        self.assertEqual(filtered.context["totals"]["unanswered"], 1)
+        person_filtered = self.client.get(
+            "/management/dashboard/?person=%s" % self.marketer.pk
+        )
+        self.assertEqual(person_filtered.context["totals"], filtered.context["totals"])
+        unknown_filtered = self.client.get("/management/dashboard/?status=unknown")
+        self.assertEqual(unknown_filtered.context["totals"]["total"], 1)
+        unanswered_filtered = self.client.get(
+            "/management/dashboard/?status=call_again"
+        )
+        self.assertEqual(unanswered_filtered.context["totals"]["unanswered"], 1)
+        unassigned_filtered = self.client.get(
+            "/management/dashboard/?staff=unassigned"
+        )
+        self.assertEqual(unassigned_filtered.context["totals"]["total"], 1)
+
+    def test_dashboard_is_manager_only_and_marketer_has_no_navigation_link(self):
+        self.client.force_login(self.marketer)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(
+            self.client.get(reverse("crm:customer_list")), "داشبورد تماس‌ها"
+        )
+
+    def test_dashboard_defaults_to_calls_from_the_last_30_days(self):
+        customer = Customer.objects.create(name="Date-range dashboard customer")
+        for suffix, age_days in (("inside", 29), ("outside", 31)):
+            CallRecord.objects.create(
+                customer=customer,
+                dialed_number=f"synthetic-range-{suffix}",
+                outcome=CallRecord.Outcome.ANSWERED,
+                external_id=f"provider-range-{suffix}",
+                called_at=timezone.now() - timedelta(days=age_days),
+            )
+        self.client.force_login(self.manager)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.context["totals"]["total"], 1)
+        self.assertContains(response, "۳۰ روز اخیر")
+
+    def test_dashboard_empty_state_and_charts_have_text_equivalents(self):
+        self.client.force_login(self.manager)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["totals"]["total"], 0)
+        self.assertContains(response, "هنوز تماس ثبت نشده است")
+        self.assertContains(response, "هنوز رویداد وب‌هوکی ثبت نشده")
+        self.assertContains(response, "جدیدترین همگام‌سازی API هنوز اجرا نشده است")
+
+    def test_failed_api_backfill_is_explicitly_marked_as_potentially_partial(self):
+        CallSyncRun.objects.create(status=CallSyncRun.Status.FAILED)
+        self.client.force_login(self.manager)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "آخرین همگام‌سازی API ناموفق بود")
+        self.assertContains(response, "ممکن است بخشی از رکوردها وارد شده باشند")
+
+    def test_failed_webhook_delivery_is_visible_without_exposing_payload_details(self):
+        CallEvent.objects.create(
+            delivery_key="synthetic-dashboard-failed-delivery",
+            disposition=CallEvent.Disposition.FAILED,
+            detail="synthetic internal failure detail",
+        )
+        self.client.force_login(self.manager)
+        response = self.client.get("/management/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "1 رویداد وب‌هوک با خطا ثبت شده است")
+        self.assertNotContains(response, "synthetic internal failure detail")
 
 
 class CustomerAssignmentTests(TestCase):

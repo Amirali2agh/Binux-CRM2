@@ -21,6 +21,8 @@ The menu is an information architecture map. The first real workflow is customer
 
 Issue #25 selects one narrow integration: Noghtefone call ingestion. Signed webhooks enter through `crm:noghtefone_webhook`. Provider HTTP, HMAC verification, and provisional payload parsing stay in `crm/integrations/noghtefone/` and `crm/integrations/noghte.py`. `crm/call_ingestion.py` associates a provider-neutral outcome with a customer. `sync_noghte_calls` is the operator-run outbound backfill. Credentials come from `NOGHTE_WEBHOOK_SECRET` / `NOGHTE_WEBHOOK_SECRET_PREVIOUS` and the file named by `NOGHTE_API_KEY_FILE`. No scheduler is configured. The flow does not place calls or store transcripts. Before adding any further provider, document the user workflow, system of record, fields exchanged, authentication/secret handling, retries, duplicate handling, and failure behavior in a scoped issue.
 
+The manager call dashboard is the named route `crm:manager_dashboard`, guarded by `manager_required`. It aggregates only provider-linked `CallRecord` rows from the last 30 days by recorded call time, applies query-string filters before aggregation, and charts the same filtered queryset. `CallSyncRun` tracks the operator-run API backfill separately from webhook delivery records so the dashboard can report unknown, incomplete, or failed data collection without making live provider requests.
+
 ## Intended customer-domain boundaries
 
 The agreed customer attributes and lifecycle are recorded in `domain-glossary.md`. The customer domain now follows these boundaries:
